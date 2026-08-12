@@ -16,8 +16,9 @@ TARGET_DATE = date(2026, 8, 19)
 TARGET_TIME = "19:00"
 TARGET_ROUTE = "Rohuküla → Heltermaa"
 
-# Rohuküla -> Heltermaa
-PRAAMID_URL = "https://www.praamid.ee/portal/ticket/departure?direction=RH"
+PRAAMID_URL = (
+    "https://www.praamid.ee/portal/ticket/departure?direction=RH"
+)
 
 # Check every 3 minutes
 CHECK_INTERVAL_SECONDS = 180
@@ -35,7 +36,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def send_telegram(message):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Telegram variables are missing.")
+        print("Telegram variables are missing.", flush=True)
         return
 
     url = (
@@ -75,8 +76,8 @@ async def dismiss_cookies(page):
                 "button",
                 name=re.compile(
                     rf"^{re.escape(text)}$",
-                    re.IGNORECASE
-                )
+                    re.IGNORECASE,
+                ),
             )
 
             if await button.count():
@@ -92,21 +93,29 @@ async def find_visible_date(page):
 
     matches = re.findall(
         r"\b(\d{1,2})\.(\d{1,2})\.(20\d{2})\b",
-        text
+        text,
     )
 
     dates = []
 
     for d, m, y in matches:
         try:
-            dates.append(date(int(y), int(m), int(d)))
+            dates.append(
+                date(
+                    int(y),
+                    int(m),
+                    int(d),
+                )
+            )
         except ValueError:
             pass
 
     if dates:
         return min(
             dates,
-            key=lambda d: abs((d - TARGET_DATE).days)
+            key=lambda d: abs(
+                (d - TARGET_DATE).days
+            ),
         )
 
     return None
@@ -125,7 +134,7 @@ async def click_next_day(page):
             try:
                 element = page.get_by_role(
                     role,
-                    name=pattern
+                    name=pattern,
                 )
 
                 if await element.count():
@@ -149,7 +158,6 @@ async def move_to_target_date(page):
         current = datetime.now(TZ).date()
 
     for _ in range(40):
-
         if current == TARGET_DATE:
             return
 
@@ -162,8 +170,10 @@ async def move_to_target_date(page):
 
         if not success:
             raise RuntimeError(
-                "Could not find next-day button."
+                "Could not find the next-day button."
             )
+
+        await page.wait_for_timeout(500)
 
         new_date = await find_visible_date(page)
 
@@ -173,6 +183,10 @@ async def move_to_target_date(page):
             current = date.fromordinal(
                 current.toordinal() + 1
             )
+
+    raise RuntimeError(
+        "Could not navigate to target date."
+    )
 
 
 async def get_target_departure(page):
@@ -188,14 +202,12 @@ async def get_target_departure(page):
         return None
 
     for i in range(min(count, 10)):
-
         element = matches.nth(i)
 
         try:
             current = element
 
-            for _ in range(9):
-
+            for _ in range(10):
                 text = (
                     await current.inner_text(
                         timeout=1500
@@ -225,19 +237,16 @@ async def get_target_departure(page):
 
 
 def analyse_availability(text):
-
     clean = " ".join(text.split())
 
     match = re.search(
         r"Sõiduauto\s*:?\s*(\d+)",
         clean,
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     if match:
-
         number = int(match.group(1))
-
         return number > 0, number
 
     lower = clean.lower()
@@ -248,6 +257,7 @@ def analyse_availability(text):
         "pole saadaval",
         "ei ole saadaval",
         "sold out",
+        "unavailable",
     ]
 
     if any(
@@ -260,16 +270,16 @@ def analyse_availability(text):
 
 
 # =========================
-# CHECK
+# CHECK PRAAMID
 # =========================
 
 async def check(page):
+    now = datetime.now(TZ)
 
     print(
-        datetime.now(TZ).strftime(
-            "%d.%m.%Y %H:%M:%S"
-        ),
-        "- checking Praamid..."
+        now.strftime("%d.%m.%Y %H:%M:%S"),
+        "- checking Praamid...",
+        flush=True,
     )
 
     await page.goto(
@@ -278,19 +288,42 @@ async def check(page):
         timeout=40000,
     )
 
+    print(
+        "Praamid page loaded.",
+        flush=True,
+    )
+
     await page.wait_for_timeout(1500)
 
     await dismiss_cookies(page)
 
+    print(
+        "Navigating to 19.08.2026...",
+        flush=True,
+    )
+
     await move_to_target_date(page)
+
+    print(
+        "Target date selected.",
+        flush=True,
+    )
 
     await page.wait_for_timeout(1000)
 
     departure = await get_target_departure(page)
 
     if not departure:
-        print("19:00 departure not found")
+        print(
+            "19:00 departure not found.",
+            flush=True,
+        )
         return False, None
+
+    print(
+        "19:00 departure found.",
+        flush=True,
+    )
 
     available, count = analyse_availability(
         departure
@@ -298,7 +331,8 @@ async def check(page):
 
     print(
         "Passenger car availability:",
-        count
+        count,
+        flush=True,
     )
 
     return available, count
@@ -309,7 +343,6 @@ async def check(page):
 # =========================
 
 async def main():
-
     if (
         not TELEGRAM_BOT_TOKEN
         or not TELEGRAM_CHAT_ID
@@ -318,6 +351,11 @@ async def main():
             "TELEGRAM_BOT_TOKEN and "
             "TELEGRAM_CHAT_ID must be set."
         )
+
+    print(
+        "Starting Praamid monitor...",
+        flush=True,
+    )
 
     send_telegram(
         "✅ Praamid monitor is online!\n\n"
@@ -330,20 +368,35 @@ async def main():
     already_alerted = False
 
     async with async_playwright() as p:
+        print(
+            "Starting Chromium...",
+            flush=True,
+        )
 
         browser = await p.chromium.launch(
-            headless=True
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ],
+        )
+
+        print(
+            "Chromium started.",
+            flush=True,
         )
 
         page = await browser.new_page(
             locale="et-EE",
-            timezone_id="Europe/Tallinn"
+            timezone_id="Europe/Tallinn",
+            viewport={
+                "width": 1280,
+                "height": 900,
+            },
         )
 
         while True:
-
             try:
-
                 if (
                     datetime.now(TZ).date()
                     > TARGET_DATE
@@ -352,28 +405,26 @@ async def main():
                         "Praamid monitor stopped — "
                         "the target date has passed."
                     )
-
                     break
 
-                send_telegram("🧪 Starting Praamid test check...")
+                # TEMPORARY TEST MESSAGE
+                send_telegram(
+                    "🧪 Starting Praamid test check..."
+                )
 
-available, count = await check(page)
+                available, count = await check(page)
 
-send_telegram(
-    f"✅ Praamid test completed.\n"
-    f"19.08.2026 at 19:00\n"
-    f"Sõiduauto result: {count}"
-)
-send_telegram(
-    f"🔎 Test check completed\n"
-    f"{TARGET_ROUTE}\n"
-    f"{TARGET_DATE.strftime('%d.%m.%Y')} at {TARGET_TIME}\n"
-    f"Sõiduauto result: {count}"
-)
+                # TEMPORARY TEST RESULT
+                send_telegram(
+                    f"✅ Praamid test completed.\n"
+                    f"{TARGET_ROUTE}\n"
+                    f"{TARGET_DATE.strftime('%d.%m.%Y')} "
+                    f"at {TARGET_TIME}\n"
+                    f"Sõiduauto result: {count}"
+                )
+
                 if available:
-
                     if not already_alerted:
-
                         amount = (
                             str(count)
                             if count is not None
@@ -381,10 +432,13 @@ send_telegram(
                         )
 
                         send_telegram(
-                            "🚨🚨🚨 PRAAMIPILET AVAILABLE 🚨🚨🚨\n\n"
-                            "Rohuküla → Heltermaa\n"
-                            "19.08.2026 at 19:00\n"
-                            f"Sõiduauto availability: {amount}\n\n"
+                            "🚨🚨🚨 PRAAMIPILET AVAILABLE "
+                            "🚨🚨🚨\n\n"
+                            f"{TARGET_ROUTE}\n"
+                            f"{TARGET_DATE.strftime('%d.%m.%Y')} "
+                            f"at {TARGET_TIME}\n"
+                            f"Sõiduauto availability: "
+                            f"{amount}\n\n"
                             "BUY NOW:\n"
                             + PRAAMID_URL
                         )
@@ -392,15 +446,23 @@ send_telegram(
                         already_alerted = True
 
                 else:
-
                     already_alerted = False
 
             except Exception as error:
-
                 print(
                     "Check failed:",
-                    repr(error)
+                    repr(error),
+                    flush=True,
                 )
+
+                try:
+                    send_telegram(
+                        "⚠️ Praamid monitor check failed.\n\n"
+                        f"{type(error).__name__}: "
+                        f"{str(error)[:500]}"
+                    )
+                except Exception:
+                    pass
 
             await asyncio.sleep(
                 CHECK_INTERVAL_SECONDS
