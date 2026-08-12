@@ -358,7 +358,12 @@ async def main():
                 available, count = await check(
                     page
                 )
-
+send_telegram(
+    f"🔎 Test check completed\n"
+    f"{TARGET_ROUTE}\n"
+    f"{TARGET_DATE.strftime('%d.%m.%Y')} at {TARGET_TIME}\n"
+    f"Sõiduauto result: {count}"
+)
                 if available:
 
                     if not already_alerted:
