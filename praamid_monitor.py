@@ -355,9 +355,15 @@ async def main():
 
                     break
 
-                available, count = await check(
-                    page
-                )
+                send_telegram("🧪 Starting Praamid test check...")
+
+available, count = await check(page)
+
+send_telegram(
+    f"✅ Praamid test completed.\n"
+    f"19.08.2026 at 19:00\n"
+    f"Sõiduauto result: {count}"
+)
 send_telegram(
     f"🔎 Test check completed\n"
     f"{TARGET_ROUTE}\n"
