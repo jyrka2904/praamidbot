@@ -1,18 +1,31 @@
 import asyncio
 import os
-from datetime import datetime
+import re
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import requests
 from playwright.async_api import async_playwright
 
 
+# =========================================================
+# SETTINGS
+# =========================================================
+
+TARGET_DATE = date(2026, 8, 19)
+TARGET_TIME = "19:00"
+TARGET_ROUTE = "Rohuküla → Heltermaa"
+
 PRAAMID_URL = (
     "https://www.praamid.ee/portal/ticket/departure?direction=RH"
 )
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+CHECK_INTERVAL_SECONDS = 180
+
+# Keep True for the first test.
+# It will send a Telegram message after every successful check.
+# Once confirmed working, we will change this to False.
+TEST_MODE = True
 
 TZ = ZoneInfo("Europe/Tallinn")
 
@@ -21,7 +34,15 @@ TZ = ZoneInfo("Europe/Tallinn")
 # TELEGRAM
 # =========================================================
 
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+
+
 def send_telegram(message):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram variables missing", flush=True)
+        return
+
     url = (
         f"https://api.telegram.org/"
         f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -34,37 +55,19 @@ def send_telegram(message):
             "text": message,
             "disable_web_page_preview": True,
         },
-        timeout=30,
+        timeout=20,
     )
 
     response.raise_for_status()
 
 
-def send_telegram_photo(file_path, caption=""):
-    url = (
-        f"https://api.telegram.org/"
-        f"bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-    )
-
-    with open(file_path, "rb") as photo:
-        response = requests.post(
-            url,
-            data={
-                "chat_id": TELEGRAM_CHAT_ID,
-                "caption": caption,
-            },
-            files={
-                "photo": photo,
-            },
-            timeout=60,
-        )
-
-    response.raise_for_status()
-
-
 # =========================================================
-# COOKIE BANNER
+# PAGE HELPERS
 # =========================================================
+
+async def get_page_text(page):
+    return await page.locator("body").inner_text()
+
 
 async def dismiss_cookies(page):
     possible_texts = [
@@ -73,6 +76,7 @@ async def dismiss_cookies(page):
         "Nõustu",
         "Accept",
         "Accept all",
+        "Luba kõik",
     ]
 
     for text in possible_texts:
@@ -89,6 +93,11 @@ async def dismiss_cookies(page):
 
                 await page.wait_for_timeout(500)
 
+                print(
+                    f"Cookie button clicked: {text}",
+                    flush=True,
+                )
+
                 return
 
         except Exception:
@@ -96,270 +105,358 @@ async def dismiss_cookies(page):
 
 
 # =========================================================
-# DOM INSPECTION
+# SELECT 19 AUGUST
 # =========================================================
 
-async def inspect_page(page):
-    result = await page.evaluate(
-        """
-        () => {
-            function elementInfo(el) {
-                const rect = el.getBoundingClientRect();
-
-                const style = window.getComputedStyle(el);
-
-                return {
-                    tag: el.tagName,
-                    text: (el.innerText || el.textContent || '')
-                        .trim()
-                        .replace(/\\s+/g, ' ')
-                        .slice(0, 300),
-
-                    ariaLabel:
-                        el.getAttribute('aria-label'),
-
-                    title:
-                        el.getAttribute('title'),
-
-                    role:
-                        el.getAttribute('role'),
-
-                    href:
-                        el.getAttribute('href'),
-
-                    type:
-                        el.getAttribute('type'),
-
-                    className:
-                        typeof el.className === 'string'
-                            ? el.className.slice(0, 300)
-                            : '',
-
-                    id:
-                        el.id || '',
-
-                    visible:
-                        !!(
-                            rect.width ||
-                            rect.height ||
-                            el.getClientRects().length
-                        ) &&
-                        style.display !== 'none' &&
-                        style.visibility !== 'hidden',
-
-                    x:
-                        Math.round(rect.x),
-
-                    y:
-                        Math.round(rect.y),
-
-                    width:
-                        Math.round(rect.width),
-
-                    height:
-                        Math.round(rect.height),
-
-                    outerHTML:
-                        el.outerHTML
-                        ? el.outerHTML
-                            .replace(/\\s+/g, ' ')
-                            .slice(0, 700)
-                        : ''
-                };
-            }
-
-
-            const all = [
-                ...document.querySelectorAll('*')
-            ];
-
-
-            const keywordElements = all.filter(el => {
-
-                const text = [
-                    el.innerText || '',
-                    el.textContent || '',
-                    el.getAttribute('aria-label') || '',
-                    el.getAttribute('title') || ''
-                ]
-                .join(' ')
-                .toLowerCase();
-
-                return (
-                    text.includes('järgmine kuupäev') ||
-                    text.includes('eelmine kuupäev') ||
-                    text.includes('12.08.2026') ||
-                    text.includes('12. august') ||
-                    text.includes('järgmine') ||
-                    text.includes('eelmine')
-                );
-            });
-
-
-            const interactive = [
-                ...document.querySelectorAll(
-                    'button, a, input, [role="button"], [tabindex]'
-                )
-            ];
-
-
-            return {
-                title: document.title,
-
-                url: window.location.href,
-
-                viewport: {
-                    width: window.innerWidth,
-                    height: window.innerHeight
-                },
-
-                keywordElements:
-                    keywordElements
-                        .slice(0, 60)
-                        .map(elementInfo),
-
-                interactiveElements:
-                    interactive
-                        .slice(0, 100)
-                        .map(elementInfo)
-            };
-        }
-        """
+async def select_target_date(page):
+    print(
+        "Opening date picker...",
+        flush=True,
     )
 
-    return result
+    date_button = page.locator(
+        "button.datepicker-button.departure-select-date"
+    )
+
+    if not await date_button.count():
+        raise RuntimeError(
+            "Could not find the departure date picker."
+        )
+
+    await date_button.first.click(
+        timeout=5000
+    )
+
+    await page.wait_for_timeout(500)
+
+    print(
+        "Date picker opened.",
+        flush=True,
+    )
+
+    # We discovered from the actual Praamid DOM that
+    # Flatpickr gives each day an aria-label such as:
+    #
+    # "Kolmapäev, 12. August, 2026, Valitud"
+    #
+    # Therefore we can directly select 19 August.
+
+    target_day = page.locator(
+        '.flatpickr-day[aria-label*="19. August, 2026"]'
+    )
+
+    count = await target_day.count()
+
+    print(
+        "19 August calendar matches:",
+        count,
+        flush=True,
+    )
+
+    if count == 0:
+        raise RuntimeError(
+            "Could not find 19 August 2026 in the date picker."
+        )
+
+    # Pick a non-disabled 19 August day.
+    chosen = None
+
+    for i in range(count):
+        candidate = target_day.nth(i)
+
+        classes = (
+            await candidate.get_attribute("class")
+            or ""
+        )
+
+        if "flatpickr-disabled" not in classes:
+            chosen = candidate
+            break
+
+    if chosen is None:
+        raise RuntimeError(
+            "19 August exists in the calendar but is disabled."
+        )
+
+    await chosen.click(
+        timeout=5000
+    )
+
+    print(
+        "Clicked 19 August.",
+        flush=True,
+    )
+
+    # Give Angular time to reload the departures.
+    await page.wait_for_timeout(2500)
+
+    # Verify selected date from hidden input.
+    try:
+        selected_value = await page.locator(
+            "#departureDate"
+        ).get_attribute("value")
+
+        print(
+            "Selected departureDate:",
+            selected_value,
+            flush=True,
+        )
+
+        if selected_value and "2026-08-19" not in selected_value:
+            raise RuntimeError(
+                f"Wrong date selected: {selected_value}"
+            )
+
+    except Exception as error:
+        print(
+            "Date verification warning:",
+            repr(error),
+            flush=True,
+        )
 
 
-def format_element(el, number):
+# =========================================================
+# FIND 19:00 DEPARTURE
+# =========================================================
+
+async def find_departure_block(page):
+    body_text = await get_page_text(page)
+
+    if TARGET_TIME not in body_text:
+        raise RuntimeError(
+            "19:00 departure was not found on 19 August."
+        )
+
+    time_matches = page.get_by_text(
+        re.compile(
+            rf"^{re.escape(TARGET_TIME)}$"
+        )
+    )
+
+    count = await time_matches.count()
+
+    print(
+        "Exact 19:00 matches:",
+        count,
+        flush=True,
+    )
+
+    # If exact matching doesn't work, use a broader search.
+    if count == 0:
+        time_matches = page.get_by_text(
+            re.compile(
+                rf"\b{re.escape(TARGET_TIME)}\b"
+            )
+        )
+
+        count = await time_matches.count()
+
+    if count == 0:
+        raise RuntimeError(
+            "Could not locate the 19:00 departure element."
+        )
+
+    for i in range(min(count, 20)):
+        element = time_matches.nth(i)
+
+        try:
+            current = element
+
+            # Walk up through parents until we find the
+            # complete departure card.
+            for _ in range(14):
+                text = (
+                    await current.inner_text(
+                        timeout=1500
+                    )
+                ).strip()
+
+                lower = text.lower()
+
+                if (
+                    TARGET_TIME in text
+                    and len(text) < 5000
+                    and (
+                        "sõiduauto" in lower
+                        or "e-pilet" in lower
+                        or "vali pilet" in lower
+                        or "välja müüdud" in lower
+                        or "saadaval" in lower
+                    )
+                ):
+                    print(
+                        "Departure card found:",
+                        " ".join(text.split())[:1500],
+                        flush=True,
+                    )
+
+                    return text
+
+                current = current.locator("..")
+
+        except Exception:
+            pass
+
+    # Diagnostic fallback.
+    position = body_text.find(
+        TARGET_TIME
+    )
+
+    if position >= 0:
+        context = body_text[
+            max(0, position - 700):
+            min(len(body_text), position + 1800)
+        ]
+
+        send_telegram(
+            "⚠️ Found 19:00 but couldn't identify "
+            "the complete departure card.\n\n"
+            + context
+        )
+
+    raise RuntimeError(
+        "19:00 exists but its departure card "
+        "could not be identified."
+    )
+
+
+# =========================================================
+# PASSENGER-CAR AVAILABILITY
+# =========================================================
+
+def analyse_car_availability(text):
+    clean = " ".join(
+        text.split()
+    )
+
+    print(
+        "Analysing:",
+        clean[:2000],
+        flush=True,
+    )
+
+    # Most useful expected format:
+    # Sõiduauto: 4
+    patterns = [
+        r"Sõiduauto\s*:?\s*(\d+)",
+        r"Sõiduauto\s+(\d+)",
+        r"Sõiduauto.*?(\d+)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(
+            pattern,
+            clean,
+            re.IGNORECASE,
+        )
+
+        if match:
+            count = int(
+                match.group(1)
+            )
+
+            return (
+                count > 0,
+                count,
+                clean,
+            )
+
+    lower = clean.lower()
+
+    sold_out_terms = [
+        "välja müüdud",
+        "e-pileteid ei ole",
+        "sõiduauto 0",
+        "sõiduauto: 0",
+        "pole saadaval",
+        "ei ole saadaval",
+        "sold out",
+        "unavailable",
+    ]
+
+    if any(
+        phrase in lower
+        for phrase in sold_out_terms
+    ):
+        return (
+            False,
+            0,
+            clean,
+        )
+
+    # We found the sailing but couldn't confidently
+    # determine the car count.
     return (
-        f"\n--- {number} ---\n"
-        f"TAG: {el.get('tag')}\n"
-        f"TEXT: {el.get('text')}\n"
-        f"ARIA: {el.get('ariaLabel')}\n"
-        f"TITLE: {el.get('title')}\n"
-        f"ROLE: {el.get('role')}\n"
-        f"HREF: {el.get('href')}\n"
-        f"ID: {el.get('id')}\n"
-        f"CLASS: {el.get('className')}\n"
-        f"VISIBLE: {el.get('visible')}\n"
-        f"POSITION: "
-        f"{el.get('x')},{el.get('y')} "
-        f"{el.get('width')}x{el.get('height')}\n"
-        f"HTML: {el.get('outerHTML')}\n"
+        False,
+        None,
+        clean,
     )
 
 
 # =========================================================
-# SEND DIAGNOSTICS
+# ONE COMPLETE CHECK
 # =========================================================
 
-async def send_diagnostics(page):
-    data = await inspect_page(page)
-
-    send_telegram(
-        "🔬 PRAAMID DOM INSPECTION\n\n"
-        f"URL:\n{data['url']}\n\n"
-        f"Title: {data['title']}\n"
-        f"Viewport: "
-        f"{data['viewport']['width']}x"
-        f"{data['viewport']['height']}\n\n"
-        f"Keyword elements found: "
-        f"{len(data['keywordElements'])}\n"
-        f"Interactive elements found: "
-        f"{len(data['interactiveElements'])}"
+async def check_once(page):
+    print(
+        "\n====================================",
+        flush=True,
     )
 
-    keyword_elements = data["keywordElements"]
+    print(
+        datetime.now(TZ).strftime(
+            "%d.%m.%Y %H:%M:%S"
+        ),
+        "- checking Praamid",
+        flush=True,
+    )
 
-    if keyword_elements:
-        chunks = []
-        current = ""
+    await page.goto(
+        PRAAMID_URL,
+        wait_until="domcontentloaded",
+        timeout=45000,
+    )
 
-        for i, el in enumerate(
-            keyword_elements[:30],
-            start=1,
-        ):
-            block = format_element(el, i)
+    await page.wait_for_timeout(
+        2000
+    )
 
-            if len(current) + len(block) > 3500:
-                chunks.append(current)
-                current = block
-            else:
-                current += block
+    await dismiss_cookies(page)
 
-        if current:
-            chunks.append(current)
+    print(
+        "Selecting 19 August...",
+        flush=True,
+    )
 
-        for i, chunk in enumerate(chunks, start=1):
-            send_telegram(
-                f"🔎 DATE ELEMENTS {i}/{len(chunks)}\n"
-                + chunk
-            )
+    await select_target_date(page)
 
-    else:
-        send_telegram(
-            "⚠️ No DOM elements containing "
-            "Järgmine/Eelmine/date text were found."
+    print(
+        "Searching for 19:00...",
+        flush=True,
+    )
+
+    departure_text = await find_departure_block(
+        page
+    )
+
+    available, count, raw = (
+        analyse_car_availability(
+            departure_text
         )
+    )
 
+    print(
+        "FINAL RESULT:",
+        "available =", available,
+        "count =", count,
+        flush=True,
+    )
 
-    # Now send interactive elements which look relevant
-    relevant = []
-
-    for el in data["interactiveElements"]:
-        combined = " ".join(
-            [
-                str(el.get("text") or ""),
-                str(el.get("ariaLabel") or ""),
-                str(el.get("title") or ""),
-                str(el.get("href") or ""),
-                str(el.get("className") or ""),
-            ]
-        ).lower()
-
-        if (
-            "kuup" in combined
-            or "date" in combined
-            or "next" in combined
-            or "prev" in combined
-            or "järgm" in combined
-            or "eelm" in combined
-            or "calendar" in combined
-        ):
-            relevant.append(el)
-
-
-    if relevant:
-        chunks = []
-        current = ""
-
-        for i, el in enumerate(
-            relevant[:40],
-            start=1,
-        ):
-            block = format_element(el, i)
-
-            if len(current) + len(block) > 3500:
-                chunks.append(current)
-                current = block
-            else:
-                current += block
-
-        if current:
-            chunks.append(current)
-
-        for i, chunk in enumerate(chunks, start=1):
-            send_telegram(
-                f"🖱 RELEVANT CLICKABLES "
-                f"{i}/{len(chunks)}\n"
-                + chunk
-            )
-
-    else:
-        send_telegram(
-            "ℹ️ No obviously date-related "
-            "interactive controls were found."
-        )
+    return (
+        available,
+        count,
+        raw,
+    )
 
 
 # =========================================================
@@ -369,16 +466,19 @@ async def send_diagnostics(page):
 async def main():
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN missing"
+            "TELEGRAM_BOT_TOKEN missing."
         )
 
     if not TELEGRAM_CHAT_ID:
         raise RuntimeError(
-            "TELEGRAM_CHAT_ID missing"
+            "TELEGRAM_CHAT_ID missing."
         )
 
     send_telegram(
-        "🧪 Praamid date-selector diagnostic started."
+        "✅ Praamid monitor FINAL TEST started!\n\n"
+        "Rohuküla → Heltermaa\n"
+        "19.08.2026 at 19:00\n"
+        "Standard passenger car"
     )
 
     async with async_playwright() as p:
@@ -399,56 +499,78 @@ async def main():
             },
         )
 
-        try:
-            send_telegram(
-                "🌐 Opening Praamid.ee..."
+        already_alerted = False
+
+        while True:
+            try:
+                # Stop after target date.
+                if (
+                    datetime.now(TZ).date()
+                    > TARGET_DATE
+                ):
+                    send_telegram(
+                        "Praamid monitor stopped because "
+                        "19 August has passed."
+                    )
+                    break
+
+                available, count, raw = (
+                    await check_once(page)
+                )
+
+                # FOR TESTING ONLY
+                if TEST_MODE:
+                    send_telegram(
+                        "🔎 CHECK WORKED\n\n"
+                        f"{TARGET_ROUTE}\n"
+                        "19.08.2026 at 19:00\n"
+                        f"Sõiduauto result: {count}\n\n"
+                        "Detected departure data:\n"
+                        + raw[:1000]
+                    )
+
+                # ACTUAL ALERT
+                if available:
+                    if not already_alerted:
+                        send_telegram(
+                            "🚨🚨🚨 PRAAMIPILET AVAILABLE! "
+                            "🚨🚨🚨\n\n"
+                            "Rohuküla → Heltermaa\n"
+                            "19.08.2026 at 19:00\n"
+                            f"Sõiduauto available: {count}\n\n"
+                            "BUY IMMEDIATELY:\n"
+                            + PRAAMID_URL
+                        )
+
+                        already_alerted = True
+
+                else:
+                    # Allows another alert if availability
+                    # disappears and later reappears.
+                    already_alerted = False
+
+            except Exception as error:
+                print(
+                    "CHECK ERROR:",
+                    repr(error),
+                    flush=True,
+                )
+
+                try:
+                    send_telegram(
+                        "⚠️ PRAAMID CHECK ERROR\n\n"
+                        f"{type(error).__name__}\n"
+                        f"{str(error)[:1500]}"
+                    )
+
+                except Exception:
+                    pass
+
+            await asyncio.sleep(
+                CHECK_INTERVAL_SECONDS
             )
 
-            await page.goto(
-                PRAAMID_URL,
-                wait_until="networkidle",
-                timeout=60000,
-            )
-
-            await page.wait_for_timeout(3000)
-
-            await dismiss_cookies(page)
-
-            await page.wait_for_timeout(1500)
-
-            screenshot_path = (
-                "/tmp/praamid_debug.png"
-            )
-
-            await page.screenshot(
-                path=screenshot_path,
-                full_page=True,
-            )
-
-            send_telegram_photo(
-                screenshot_path,
-                "📸 What Railway/Playwright "
-                "currently sees on Praamid.ee"
-            )
-
-            await send_diagnostics(page)
-
-            send_telegram(
-                "✅ Diagnostic finished.\n\n"
-                "Send me the DATE ELEMENTS / "
-                "RELEVANT CLICKABLES messages."
-            )
-
-        except Exception as error:
-            send_telegram(
-                "❌ DIAGNOSTIC ERROR\n\n"
-                f"{type(error).__name__}\n"
-                f"{str(error)[:2000]}"
-            )
-
-        # Keep container alive so Railway
-        # does not repeatedly rerun the diagnostic.
-        await asyncio.sleep(3600)
+        await browser.close()
 
 
 if __name__ == "__main__":
