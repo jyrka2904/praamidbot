@@ -20,9 +20,7 @@ PRAAMID_URL = (
     "https://www.praamid.ee/portal/ticket/departure?direction=RH"
 )
 
-# Check every 3 minutes
 CHECK_INTERVAL_SECONDS = 180
-
 TZ = ZoneInfo("Europe/Tallinn")
 
 
@@ -274,10 +272,10 @@ def analyse_availability(text):
 # =========================
 
 async def check(page):
-    now = datetime.now(TZ)
-
     print(
-        now.strftime("%d.%m.%Y %H:%M:%S"),
+        datetime.now(TZ).strftime(
+            "%d.%m.%Y %H:%M:%S"
+        ),
         "- checking Praamid...",
         flush=True,
     )
@@ -298,7 +296,7 @@ async def check(page):
     await dismiss_cookies(page)
 
     print(
-        "Navigating to 19.08.2026...",
+        "Navigating to target date...",
         flush=True,
     )
 
@@ -343,132 +341,141 @@ async def check(page):
 # =========================
 
 async def main():
-    if (
-        not TELEGRAM_BOT_TOKEN
-        or not TELEGRAM_CHAT_ID
-    ):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         raise RuntimeError(
             "TELEGRAM_BOT_TOKEN and "
             "TELEGRAM_CHAT_ID must be set."
         )
 
-    print(
-        "Starting Praamid monitor...",
-        flush=True,
-    )
-
     send_telegram(
         "✅ Praamid monitor is online!\n\n"
         "Rohuküla → Heltermaa\n"
         "19.08.2026 at 19:00\n"
-        "Standard passenger car\n\n"
-        "Checking every 3 minutes."
+        "Standard passenger car"
     )
 
-    already_alerted = False
-
-    async with async_playwright() as p:
-        print(
-            "Starting Chromium...",
-            flush=True,
+    try:
+        send_telegram(
+            "1️⃣ Starting Playwright..."
         )
 
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ],
-        )
-
-        print(
-            "Chromium started.",
-            flush=True,
-        )
-
-        page = await browser.new_page(
-            locale="et-EE",
-            timezone_id="Europe/Tallinn",
-            viewport={
-                "width": 1280,
-                "height": 900,
-            },
-        )
-
-        while True:
-            try:
-                if (
-                    datetime.now(TZ).date()
-                    > TARGET_DATE
-                ):
-                    send_telegram(
-                        "Praamid monitor stopped — "
-                        "the target date has passed."
-                    )
-                    break
-
-                # TEMPORARY TEST MESSAGE
-                send_telegram(
-                    "🧪 Starting Praamid test check..."
-                )
-
-                available, count = await check(page)
-
-                # TEMPORARY TEST RESULT
-                send_telegram(
-                    f"✅ Praamid test completed.\n"
-                    f"{TARGET_ROUTE}\n"
-                    f"{TARGET_DATE.strftime('%d.%m.%Y')} "
-                    f"at {TARGET_TIME}\n"
-                    f"Sõiduauto result: {count}"
-                )
-
-                if available:
-                    if not already_alerted:
-                        amount = (
-                            str(count)
-                            if count is not None
-                            else "YES"
-                        )
-
-                        send_telegram(
-                            "🚨🚨🚨 PRAAMIPILET AVAILABLE "
-                            "🚨🚨🚨\n\n"
-                            f"{TARGET_ROUTE}\n"
-                            f"{TARGET_DATE.strftime('%d.%m.%Y')} "
-                            f"at {TARGET_TIME}\n"
-                            f"Sõiduauto availability: "
-                            f"{amount}\n\n"
-                            "BUY NOW:\n"
-                            + PRAAMID_URL
-                        )
-
-                        already_alerted = True
-
-                else:
-                    already_alerted = False
-
-            except Exception as error:
-                print(
-                    "Check failed:",
-                    repr(error),
-                    flush=True,
-                )
-
-                try:
-                    send_telegram(
-                        "⚠️ Praamid monitor check failed.\n\n"
-                        f"{type(error).__name__}: "
-                        f"{str(error)[:500]}"
-                    )
-                except Exception:
-                    pass
-
-            await asyncio.sleep(
-                CHECK_INTERVAL_SECONDS
+        async with async_playwright() as p:
+            send_telegram(
+                "2️⃣ Playwright started. "
+                "Starting Chromium..."
             )
 
-        await browser.close()
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                ],
+            )
+
+            send_telegram(
+                "3️⃣ Chromium started. "
+                "Creating browser page..."
+            )
+
+            page = await browser.new_page(
+                locale="et-EE",
+                timezone_id="Europe/Tallinn",
+                viewport={
+                    "width": 1280,
+                    "height": 900,
+                },
+            )
+
+            send_telegram(
+                "4️⃣ Browser ready. "
+                "Starting first Praamid check..."
+            )
+
+            already_alerted = False
+
+            while True:
+                try:
+                    if datetime.now(TZ).date() > TARGET_DATE:
+                        send_telegram(
+                            "Praamid monitor stopped — "
+                            "the target date has passed."
+                        )
+                        break
+
+                    available, count = await check(page)
+
+                    send_telegram(
+                        f"5️⃣ Praamid check completed!\n\n"
+                        f"{TARGET_ROUTE}\n"
+                        f"{TARGET_DATE.strftime('%d.%m.%Y')} "
+                        f"at {TARGET_TIME}\n"
+                        f"Sõiduauto result: {count}"
+                    )
+
+                    if available:
+                        if not already_alerted:
+                            amount = (
+                                str(count)
+                                if count is not None
+                                else "YES"
+                            )
+
+                            send_telegram(
+                                "🚨🚨🚨 PRAAMIPILET AVAILABLE "
+                                "🚨🚨🚨\n\n"
+                                f"{TARGET_ROUTE}\n"
+                                f"{TARGET_DATE.strftime('%d.%m.%Y')} "
+                                f"at {TARGET_TIME}\n"
+                                f"Sõiduauto availability: "
+                                f"{amount}\n\n"
+                                "BUY NOW:\n"
+                                + PRAAMID_URL
+                            )
+
+                            already_alerted = True
+
+                    else:
+                        already_alerted = False
+
+                except Exception as error:
+                    print(
+                        "CHECK ERROR:",
+                        repr(error),
+                        flush=True,
+                    )
+
+                    send_telegram(
+                        "⚠️ PRAAMID CHECK ERROR\n\n"
+                        f"{type(error).__name__}\n"
+                        f"{str(error)[:1000]}"
+                    )
+
+                await asyncio.sleep(
+                    CHECK_INTERVAL_SECONDS
+                )
+
+            await browser.close()
+
+    except Exception as error:
+        print(
+            "FATAL STARTUP ERROR:",
+            repr(error),
+            flush=True,
+        )
+
+        try:
+            send_telegram(
+                "❌ FATAL STARTUP ERROR\n\n"
+                f"{type(error).__name__}\n"
+                f"{str(error)[:1500]}"
+            )
+        except Exception:
+            pass
+
+        # Keep the Railway process alive so we can read the error
+        # instead of immediately restarting.
+        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
