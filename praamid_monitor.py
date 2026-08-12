@@ -12,31 +12,38 @@ from playwright.async_api import async_playwright
 # SETTINGS
 # =========================================================
 
-TARGET_DATE = date(2026, 8, 19)
-TARGET_TIME = "19:00"
-TARGET_ROUTE = "Rohuküla → Heltermaa"
-
-PRAAMID_URL = (
-    "https://www.praamid.ee/portal/ticket/departure?direction=RH"
-)
-
 CHECK_INTERVAL_SECONDS = 180
-
-# Keep True for the first test.
-# It will send a Telegram message after every successful check.
-# Once confirmed working, we will change this to False.
-TEST_MODE = True
-
 TZ = ZoneInfo("Europe/Tallinn")
+
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+
+
+# =========================================================
+# SAILINGS TO MONITOR
+# =========================================================
+
+MONITORS = [
+    {
+        "name": "Outbound",
+        "route": "Rohuküla → Heltermaa",
+        "direction": "RH",
+        "date": date(2026, 8, 19),
+        "times": ["19:00"],
+    },
+    {
+        "name": "Return",
+        "route": "Heltermaa → Rohuküla",
+        "direction": "HR",
+        "date": date(2026, 8, 23),
+        "times": ["14:30", "16:00", "17:30"],
+    },
+]
 
 
 # =========================================================
 # TELEGRAM
 # =========================================================
-
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-
 
 def send_telegram(message):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -65,12 +72,8 @@ def send_telegram(message):
 # PAGE HELPERS
 # =========================================================
 
-async def get_page_text(page):
-    return await page.locator("body").inner_text()
-
-
 async def dismiss_cookies(page):
-    possible_texts = [
+    texts = [
         "Sain aru",
         "Nõustun",
         "Nõustu",
@@ -79,25 +82,13 @@ async def dismiss_cookies(page):
         "Luba kõik",
     ]
 
-    for text in possible_texts:
+    for text in texts:
         try:
-            locator = page.get_by_text(
-                text,
-                exact=True,
-            )
+            locator = page.get_by_text(text, exact=True)
 
             if await locator.count():
-                await locator.first.click(
-                    timeout=2000
-                )
-
-                await page.wait_for_timeout(500)
-
-                print(
-                    f"Cookie button clicked: {text}",
-                    flush=True,
-                )
-
+                await locator.first.click(timeout=2000)
+                await page.wait_for_timeout(400)
                 return
 
         except Exception:
@@ -105,15 +96,26 @@ async def dismiss_cookies(page):
 
 
 # =========================================================
-# SELECT 19 AUGUST
+# DATE PICKER
 # =========================================================
 
-async def select_target_date(page):
-    print(
-        "Opening date picker...",
-        flush=True,
-    )
+MONTH_NAMES = {
+    1: "Jaanuar",
+    2: "Veebruar",
+    3: "Märts",
+    4: "Aprill",
+    5: "Mai",
+    6: "Juuni",
+    7: "Juuli",
+    8: "August",
+    9: "September",
+    10: "Oktoober",
+    11: "November",
+    12: "Detsember",
+}
 
+
+async def select_target_date(page, target_date):
     date_button = page.locator(
         "button.datepicker-button.departure-select-date"
     )
@@ -123,46 +125,31 @@ async def select_target_date(page):
             "Could not find the departure date picker."
         )
 
-    await date_button.first.click(
-        timeout=5000
+    await date_button.first.click(timeout=5000)
+    await page.wait_for_timeout(400)
+
+    month_name = MONTH_NAMES[target_date.month]
+
+    selector = (
+        f'.flatpickr-day[aria-label*="'
+        f'{target_date.day}. {month_name}, {target_date.year}'
+        f'"]'
     )
 
-    await page.wait_for_timeout(500)
+    target_days = page.locator(selector)
 
-    print(
-        "Date picker opened.",
-        flush=True,
-    )
-
-    # We discovered from the actual Praamid DOM that
-    # Flatpickr gives each day an aria-label such as:
-    #
-    # "Kolmapäev, 12. August, 2026, Valitud"
-    #
-    # Therefore we can directly select 19 August.
-
-    target_day = page.locator(
-        '.flatpickr-day[aria-label*="19. August, 2026"]'
-    )
-
-    count = await target_day.count()
-
-    print(
-        "19 August calendar matches:",
-        count,
-        flush=True,
-    )
+    count = await target_days.count()
 
     if count == 0:
         raise RuntimeError(
-            "Could not find 19 August 2026 in the date picker."
+            f"Could not find {target_date.strftime('%d.%m.%Y')} "
+            "in the calendar."
         )
 
-    # Pick a non-disabled 19 August day.
     chosen = None
 
     for i in range(count):
-        candidate = target_day.nth(i)
+        candidate = target_days.nth(i)
 
         classes = (
             await candidate.get_attribute("class")
@@ -175,95 +162,48 @@ async def select_target_date(page):
 
     if chosen is None:
         raise RuntimeError(
-            "19 August exists in the calendar but is disabled."
+            f"{target_date.strftime('%d.%m.%Y')} "
+            "exists but is disabled."
         )
 
-    await chosen.click(
-        timeout=5000
-    )
+    await chosen.click(timeout=5000)
 
-    print(
-        "Clicked 19 August.",
-        flush=True,
-    )
-
-    # Give Angular time to reload the departures.
-    await page.wait_for_timeout(2500)
-
-    # Verify selected date from hidden input.
-    try:
-        selected_value = await page.locator(
-            "#departureDate"
-        ).get_attribute("value")
-
-        print(
-            "Selected departureDate:",
-            selected_value,
-            flush=True,
-        )
-
-        if selected_value and "2026-08-19" not in selected_value:
-            raise RuntimeError(
-                f"Wrong date selected: {selected_value}"
-            )
-
-    except Exception as error:
-        print(
-            "Date verification warning:",
-            repr(error),
-            flush=True,
-        )
+    # Give Praamid time to load departures.
+    await page.wait_for_timeout(2200)
 
 
 # =========================================================
-# FIND 19:00 DEPARTURE
+# FIND DEPARTURE
 # =========================================================
 
-async def find_departure_block(page):
-    body_text = await get_page_text(page)
+async def find_departure_block(page, target_time):
+    body = await page.locator("body").inner_text()
 
-    if TARGET_TIME not in body_text:
-        raise RuntimeError(
-            "19:00 departure was not found on 19 August."
-        )
+    if target_time not in body:
+        return None
 
-    time_matches = page.get_by_text(
+    matches = page.get_by_text(
         re.compile(
-            rf"^{re.escape(TARGET_TIME)}$"
+            rf"^{re.escape(target_time)}$"
         )
     )
 
-    count = await time_matches.count()
+    count = await matches.count()
 
-    print(
-        "Exact 19:00 matches:",
-        count,
-        flush=True,
-    )
-
-    # If exact matching doesn't work, use a broader search.
     if count == 0:
-        time_matches = page.get_by_text(
+        matches = page.get_by_text(
             re.compile(
-                rf"\b{re.escape(TARGET_TIME)}\b"
+                rf"\b{re.escape(target_time)}\b"
             )
         )
-
-        count = await time_matches.count()
-
-    if count == 0:
-        raise RuntimeError(
-            "Could not locate the 19:00 departure element."
-        )
+        count = await matches.count()
 
     for i in range(min(count, 20)):
-        element = time_matches.nth(i)
+        element = matches.nth(i)
 
         try:
             current = element
 
-            # Walk up through parents until we find the
-            # complete departure card.
             for _ in range(14):
                 text = (
                     await current.inner_text(
@@ -274,7 +214,7 @@ async def find_departure_block(page):
                 lower = text.lower()
 
                 if (
-                    TARGET_TIME in text
+                    target_time in text
                     and len(text) < 5000
                     and (
                         "sõiduauto" in lower
@@ -284,12 +224,6 @@ async def find_departure_block(page):
                         or "saadaval" in lower
                     )
                 ):
-                    print(
-                        "Departure card found:",
-                        " ".join(text.split())[:1500],
-                        flush=True,
-                    )
-
                     return text
 
                 current = current.locator("..")
@@ -297,46 +231,19 @@ async def find_departure_block(page):
         except Exception:
             pass
 
-    # Diagnostic fallback.
-    position = body_text.find(
-        TARGET_TIME
-    )
-
-    if position >= 0:
-        context = body_text[
-            max(0, position - 700):
-            min(len(body_text), position + 1800)
-        ]
-
-        send_telegram(
-            "⚠️ Found 19:00 but couldn't identify "
-            "the complete departure card.\n\n"
-            + context
-        )
-
-    raise RuntimeError(
-        "19:00 exists but its departure card "
-        "could not be identified."
-    )
+    return None
 
 
 # =========================================================
-# PASSENGER-CAR AVAILABILITY
+# CAR AVAILABILITY
 # =========================================================
 
 def analyse_car_availability(text):
-    clean = " ".join(
-        text.split()
-    )
+    if not text:
+        return False, None
 
-    print(
-        "Analysing:",
-        clean[:2000],
-        flush=True,
-    )
+    clean = " ".join(text.split())
 
-    # Most useful expected format:
-    # Sõiduauto: 4
     patterns = [
         r"Sõiduauto\s*:?\s*(\d+)",
         r"Sõiduauto\s+(\d+)",
@@ -351,15 +258,8 @@ def analyse_car_availability(text):
         )
 
         if match:
-            count = int(
-                match.group(1)
-            )
-
-            return (
-                count > 0,
-                count,
-                clean,
-            )
+            count = int(match.group(1))
+            return count > 0, count
 
     lower = clean.lower()
 
@@ -374,89 +274,72 @@ def analyse_car_availability(text):
         "unavailable",
     ]
 
-    if any(
-        phrase in lower
-        for phrase in sold_out_terms
-    ):
-        return (
-            False,
-            0,
-            clean,
-        )
+    if any(term in lower for term in sold_out_terms):
+        return False, 0
 
-    # We found the sailing but couldn't confidently
-    # determine the car count.
-    return (
-        False,
-        None,
-        clean,
-    )
+    return False, None
 
 
 # =========================================================
-# ONE COMPLETE CHECK
+# CHECK ONE ROUTE / DATE
 # =========================================================
 
-async def check_once(page):
-    print(
-        "\n====================================",
-        flush=True,
+async def check_monitor(page, monitor):
+    direction = monitor["direction"]
+
+    url = (
+        "https://www.praamid.ee/portal/ticket/departure"
+        f"?direction={direction}"
     )
 
     print(
-        datetime.now(TZ).strftime(
-            "%d.%m.%Y %H:%M:%S"
-        ),
-        "- checking Praamid",
+        f"\nChecking {monitor['route']} "
+        f"{monitor['date'].strftime('%d.%m.%Y')}",
         flush=True,
     )
 
     await page.goto(
-        PRAAMID_URL,
+        url,
         wait_until="domcontentloaded",
         timeout=45000,
     )
 
-    await page.wait_for_timeout(
-        2000
-    )
-
+    await page.wait_for_timeout(1800)
     await dismiss_cookies(page)
 
-    print(
-        "Selecting 19 August...",
-        flush=True,
+    await select_target_date(
+        page,
+        monitor["date"],
     )
 
-    await select_target_date(page)
+    results = {}
 
-    print(
-        "Searching for 19:00...",
-        flush=True,
-    )
-
-    departure_text = await find_departure_block(
-        page
-    )
-
-    available, count, raw = (
-        analyse_car_availability(
-            departure_text
+    for target_time in monitor["times"]:
+        departure = await find_departure_block(
+            page,
+            target_time,
         )
-    )
 
-    print(
-        "FINAL RESULT:",
-        "available =", available,
-        "count =", count,
-        flush=True,
-    )
+        available, count = (
+            analyse_car_availability(
+                departure
+            )
+        )
 
-    return (
-        available,
-        count,
-        raw,
-    )
+        results[target_time] = {
+            "available": available,
+            "count": count,
+        }
+
+        print(
+            monitor["route"],
+            target_time,
+            "Sõiduauto:",
+            count,
+            flush=True,
+        )
+
+    return results
 
 
 # =========================================================
@@ -475,11 +358,17 @@ async def main():
         )
 
     send_telegram(
-        "✅ Praamid monitor FINAL TEST started!\n\n"
-        "Rohuküla → Heltermaa\n"
-        "19.08.2026 at 19:00\n"
-        "Standard passenger car"
+        "✅ Praamid monitor is running.\n\n"
+        "Monitoring:\n"
+        "19.08 Rohuküla → Heltermaa at 19:00\n"
+        "23.08 Heltermaa → Rohuküla at "
+        "14:30 / 16:00 / 17:30\n\n"
+        "I will only message you when a "
+        "passenger-car ticket becomes available."
     )
+
+    # Stores previous availability state for each sailing.
+    previous_states = {}
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -499,72 +388,68 @@ async def main():
             },
         )
 
-        already_alerted = False
-
         while True:
-            try:
-                # Stop after target date.
-                if (
-                    datetime.now(TZ).date()
-                    > TARGET_DATE
-                ):
-                    send_telegram(
-                        "Praamid monitor stopped because "
-                        "19 August has passed."
-                    )
-                    break
+            now = datetime.now(TZ)
 
-                available, count, raw = (
-                    await check_once(page)
+            # Stop after the final monitored date.
+            if now.date() > date(2026, 8, 23):
+                send_telegram(
+                    "Praamid monitor stopped — "
+                    "all monitored sailings have passed."
                 )
+                break
 
-                # FOR TESTING ONLY
-                if TEST_MODE:
-                    send_telegram(
-                        "🔎 CHECK WORKED\n\n"
-                        f"{TARGET_ROUTE}\n"
-                        "19.08.2026 at 19:00\n"
-                        f"Sõiduauto result: {count}\n\n"
-                        "Detected departure data:\n"
-                        + raw[:1000]
-                    )
-
-                # ACTUAL ALERT
-                if available:
-                    if not already_alerted:
-                        send_telegram(
-                            "🚨🚨🚨 PRAAMIPILET AVAILABLE! "
-                            "🚨🚨🚨\n\n"
-                            "Rohuküla → Heltermaa\n"
-                            "19.08.2026 at 19:00\n"
-                            f"Sõiduauto available: {count}\n\n"
-                            "BUY IMMEDIATELY:\n"
-                            + PRAAMID_URL
-                        )
-
-                        already_alerted = True
-
-                else:
-                    # Allows another alert if availability
-                    # disappears and later reappears.
-                    already_alerted = False
-
-            except Exception as error:
-                print(
-                    "CHECK ERROR:",
-                    repr(error),
-                    flush=True,
-                )
+            for monitor in MONITORS:
+                # Don't keep checking a date after it has passed.
+                if now.date() > monitor["date"]:
+                    continue
 
                 try:
-                    send_telegram(
-                        "⚠️ PRAAMID CHECK ERROR\n\n"
-                        f"{type(error).__name__}\n"
-                        f"{str(error)[:1500]}"
+                    results = await check_monitor(
+                        page,
+                        monitor,
                     )
 
-                except Exception:
-                    pass
+                    for target_time, result in results.items():
+                        key = (
+                            monitor["route"],
+                            monitor["date"].isoformat(),
+                            target_time,
+                        )
+
+                        available = result["available"]
+                        count = result["count"]
+
+                        previous = previous_states.get(
+                            key,
+                            False,
+                        )
+
+                        # Alert only when availability changes
+                        # from unavailable -> available.
+                        if available and not previous:
+                            send_telegram(
+                                "🚨🚨🚨 PRAAMIPILET AVAILABLE! "
+                                "🚨🚨🚨\n\n"
+                                f"{monitor['route']}\n"
+                                f"{monitor['date'].strftime('%d.%m.%Y')} "
+                                f"at {target_time}\n"
+                                f"Sõiduauto available: {count}\n\n"
+                                "BUY NOW:\n"
+                                "https://www.praamid.ee/"
+                                "portal/ticket/departure"
+                                f"?direction={monitor['direction']}"
+                            )
+
+                        previous_states[key] = available
+
+                except Exception as error:
+                    print(
+                        "CHECK ERROR:",
+                        monitor["route"],
+                        repr(error),
+                        flush=True,
+                    )
 
             await asyncio.sleep(
                 CHECK_INTERVAL_SECONDS
