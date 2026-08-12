@@ -10,4 +10,4 @@ RUN playwright install --with-deps chromium
 
 COPY . .
 
-CMD ["python", "praamid_monitor.py"]
+CMD ["python", "-u", "praamid_monitor.py"]
