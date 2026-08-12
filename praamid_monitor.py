@@ -21,7 +21,6 @@ PRAAMID_URL = (
 )
 
 CHECK_INTERVAL_SECONDS = 180
-
 TZ = ZoneInfo("Europe/Tallinn")
 
 
@@ -57,11 +56,14 @@ def send_telegram(message):
 
 
 # =========================================================
-# COOKIE BANNER
+# PAGE HELPERS
 # =========================================================
 
-async def dismiss_cookies(page):
+async def get_page_text(page):
+    return await page.locator("body").inner_text()
 
+
+async def dismiss_cookies(page):
     texts = [
         "Sain aru",
         "Nõustun",
@@ -96,65 +98,81 @@ async def dismiss_cookies(page):
 
 
 # =========================================================
-# DATE PARSING
+# DATE RECOGNITION
 # =========================================================
 
-async def get_page_text(page):
-    return await page.locator("body").inner_text()
-
-
 async def find_dates_on_page(page):
-
     text = await get_page_text(page)
 
-    patterns = [
-        r"\b(\d{1,2})\.(\d{1,2})\.(20\d{2})\b",
-        r"\b(\d{1,2})\.(\d{1,2})\.(\d{2})\b",
-    ]
+    months = {
+        "jaanuar": 1,
+        "veebruar": 2,
+        "märts": 3,
+        "aprill": 4,
+        "mai": 5,
+        "juuni": 6,
+        "juuli": 7,
+        "august": 8,
+        "september": 9,
+        "oktoober": 10,
+        "november": 11,
+        "detsember": 12,
+    }
 
     found = []
 
-    for pattern in patterns:
+    # Praamid format, e.g. "12. august"
+    for month_name, month_number in months.items():
+        pattern = rf"\b(\d{{1,2}})\.\s*{month_name}\b"
 
         for match in re.finditer(
             pattern,
             text,
+            re.IGNORECASE
         ):
-
-            d, m, y = map(
-                int,
-                match.groups(),
-            )
-
-            if y < 100:
-                y += 2000
+            day = int(match.group(1))
 
             try:
                 found.append(
                     date(
-                        y,
-                        m,
-                        d,
+                        TARGET_DATE.year,
+                        month_number,
+                        day
                     )
                 )
             except ValueError:
                 pass
 
+    # Numeric dates, just in case
+    for match in re.finditer(
+        r"\b(\d{1,2})\.(\d{1,2})\.(20\d{2})\b",
+        text
+    ):
+        day, month, year = map(
+            int,
+            match.groups()
+        )
+
+        try:
+            found.append(
+                date(year, month, day)
+            )
+        except ValueError:
+            pass
+
     return found
 
 
 async def find_visible_date(page):
-
     dates = await find_dates_on_page(page)
 
     if not dates:
         return None
 
-    # Find the date closest to our target.
     return min(
         dates,
-        key=lambda x: abs(
-            (x - TARGET_DATE).days
+        key=lambda d: abs(
+            (d - TARGET_DATE).days
         ),
     )
 
@@ -164,14 +182,12 @@ async def find_visible_date(page):
 # =========================================================
 
 async def click_next_day(page):
-
     print(
-        "Trying to click next-day control...",
+        "Trying to find next-date control...",
         flush=True,
     )
 
-    # METHOD 1:
-    # Visible text exactly matching Praamid terminology.
+    # Method 1: visible text
     try:
         locator = page.get_by_text(
             "Järgmine kuupäev",
@@ -179,28 +195,17 @@ async def click_next_day(page):
         )
 
         if await locator.count():
-            print(
-                "Found next date using visible text.",
-                flush=True,
-            )
-
             await locator.first.click(
                 timeout=3000
             )
 
-            await page.wait_for_timeout(700)
-
+            await page.wait_for_timeout(800)
             return True
 
-    except Exception as e:
-        print(
-            "Method 1 failed:",
-            repr(e),
-            flush=True,
-        )
+    except Exception:
+        pass
 
-    # METHOD 2:
-    # Partial text.
+    # Method 2: partial text
     try:
         locator = page.get_by_text(
             "Järgmine kuupäev",
@@ -208,100 +213,62 @@ async def click_next_day(page):
         )
 
         if await locator.count():
-            print(
-                "Found next date using partial text.",
-                flush=True,
-            )
-
             await locator.first.click(
                 timeout=3000
             )
 
-            await page.wait_for_timeout(700)
-
+            await page.wait_for_timeout(800)
             return True
 
-    except Exception as e:
-        print(
-            "Method 2 failed:",
-            repr(e),
-            flush=True,
-        )
+    except Exception:
+        pass
 
-    # METHOD 3:
-    # Accessible name.
+    # Method 3: aria-label
     try:
         locator = page.locator(
             '[aria-label*="Järgmine"]'
         )
 
         if await locator.count():
-            print(
-                "Found next date using aria-label.",
-                flush=True,
-            )
-
             await locator.first.click(
                 timeout=3000
             )
 
-            await page.wait_for_timeout(700)
-
+            await page.wait_for_timeout(800)
             return True
 
-    except Exception as e:
-        print(
-            "Method 3 failed:",
-            repr(e),
-            flush=True,
-        )
+    except Exception:
+        pass
 
-    # METHOD 4:
-    # title attribute.
+    # Method 4: title attribute
     try:
         locator = page.locator(
             '[title*="Järgmine"]'
         )
 
         if await locator.count():
-            print(
-                "Found next date using title.",
-                flush=True,
-            )
-
             await locator.first.click(
                 timeout=3000
             )
 
-            await page.wait_for_timeout(700)
-
+            await page.wait_for_timeout(800)
             return True
 
-    except Exception as e:
-        print(
-            "Method 4 failed:",
-            repr(e),
-            flush=True,
-        )
+    except Exception:
+        pass
 
-    # METHOD 5:
-    # Search all buttons and links.
+    # Method 5: scan clickable elements
     try:
-
         candidates = page.locator(
-            "button, a"
+            "button, a, [role='button']"
         )
 
         count = await candidates.count()
 
-        for i in range(
-            min(count, 200)
-        ):
-
+        for i in range(min(count, 300)):
             element = candidates.nth(i)
 
             try:
-
                 text = (
                     await element.inner_text()
                 ).strip()
@@ -329,44 +296,24 @@ async def click_next_day(page):
                 ).lower()
 
                 if (
-                    "järgmine kuupäev"
-                    in combined
-                    or
-                    "next date"
-                    in combined
+                    "järgmine kuupäev" in combined
+                    or "next date" in combined
                 ):
-
-                    print(
-                        "Found next date by scanning "
-                        "buttons/links:",
-                        combined,
-                        flush=True,
-                    )
-
                     await element.click(
                         timeout=3000
                     )
 
-                    await page.wait_for_timeout(
-                        700
-                    )
-
+                    await page.wait_for_timeout(800)
                     return True
 
             except Exception:
                 pass
 
-    except Exception as e:
-        print(
-            "Method 5 failed:",
-            repr(e),
-            flush=True,
-        )
+    except Exception:
+        pass
 
-    # METHOD 6:
-    # JavaScript fallback.
+    # Method 6: JavaScript scan
     try:
-
         result = await page.evaluate(
             """
             () => {
@@ -377,7 +324,6 @@ async def click_next_day(page):
                 ];
 
                 for (const el of all) {
-
                     const text = [
                         el.innerText || '',
                         el.getAttribute('aria-label') || '',
@@ -399,35 +345,20 @@ async def click_next_day(page):
         )
 
         if result:
-
-            print(
-                "Clicked next date through JS:",
-                result,
-                flush=True,
-            )
-
-            await page.wait_for_timeout(
-                700
-            )
-
+            await page.wait_for_timeout(800)
             return True
 
-    except Exception as e:
-        print(
-            "Method 6 failed:",
-            repr(e),
-            flush=True,
-        )
+    except Exception:
+        pass
 
     return False
 
 
 # =========================================================
-# NAVIGATE TO 19 AUGUST
+# MOVE TO 19 AUGUST
 # =========================================================
 
 async def move_to_target_date(page):
-
     current = await find_visible_date(page)
 
     print(
@@ -437,14 +368,13 @@ async def move_to_target_date(page):
     )
 
     if current is None:
-
-        page_text = await get_page_text(page)
+        body_text = await get_page_text(page)
 
         send_telegram(
             "⚠️ Could not determine the currently "
             "displayed Praamid date.\n\n"
             "First visible page text:\n"
-            + page_text[:1000]
+            + body_text[:1500]
         )
 
         raise RuntimeError(
@@ -452,58 +382,44 @@ async def move_to_target_date(page):
         )
 
     for attempt in range(40):
-
         print(
-            f"Current date: {current} "
+            f"Current date: {current} | "
             f"Target: {TARGET_DATE}",
             flush=True,
         )
 
         if current == TARGET_DATE:
-
             print(
                 "Target date reached!",
                 flush=True,
             )
-
             return
 
         if current > TARGET_DATE:
-
             raise RuntimeError(
-                f"Praamid page is showing "
-                f"{current}, which is after "
-                f"target {TARGET_DATE}."
+                f"Displayed date {current} is after "
+                f"target date {TARGET_DATE}."
             )
 
-        clicked = await click_next_day(
-            page
-        )
+        clicked = await click_next_day(page)
 
         if not clicked:
-
-            body_text = await get_page_text(
-                page
-            )
+            body_text = await get_page_text(page)
 
             send_telegram(
                 "⚠️ NEXT-DAY BUTTON NOT FOUND\n\n"
                 f"Current detected date: {current}\n\n"
                 "Visible Praamid page text:\n"
-                + body_text[:1500]
+                + body_text[:1800]
             )
 
             raise RuntimeError(
                 "Could not find the next-day button."
             )
 
-        await page.wait_for_timeout(
-            800
-        )
+        await page.wait_for_timeout(800)
 
-        new_date = await find_visible_date(
-            page
-        )
+        new_date = await find_visible_date(page)
 
         print(
             "Detected date after click:",
@@ -528,19 +444,17 @@ async def move_to_target_date(page):
 # =========================================================
 
 async def get_target_departure(page):
-
     body = await get_page_text(page)
 
     print(
-        "Searching for 19:00 departure...",
+        "Searching for target departure...",
         flush=True,
     )
 
     if TARGET_TIME not in body:
-
         send_telegram(
-            "⚠️ 19:00 was not found on "
-            "the selected date page."
+            "⚠️ 19:00 was not found on the "
+            "selected Praamid date page."
         )
 
         return None
@@ -559,18 +473,13 @@ async def get_target_departure(page):
         flush=True,
     )
 
-    for i in range(
-        min(count, 20)
-    ):
-
+    for i in range(min(count, 20)):
         element = matches.nth(i)
 
         try:
-
             current = element
 
-            for depth in range(12):
-
+            for _ in range(12):
                 text = (
                     await current.inner_text(
                         timeout=1500
@@ -584,40 +493,23 @@ async def get_target_departure(page):
                     and len(text) < 4000
                     and (
                         "sõiduauto" in lower
-                        or
-                        "vali pilet" in lower
-                        or
-                        "e-pilet" in lower
-                        or
-                        "välja müüdud" in lower
+                        or "vali pilet" in lower
+                        or "e-pilet" in lower
+                        or "välja müüdud" in lower
                     )
                 ):
-
-                    print(
-                        "Found departure block:",
-                        " ".join(
-                            text.split()
-                        )[:1000],
-                        flush=True,
-                    )
-
                     return text
 
-                current = current.locator(
-                    ".."
-                )
+                current = current.locator("..")
 
         except Exception:
             pass
 
-    # Fallback:
-    # return text surrounding 19:00 if possible.
     position = body.find(
         TARGET_TIME
     )
 
     if position >= 0:
-
         start = max(
             0,
             position - 500,
@@ -625,7 +517,7 @@ async def get_target_departure(page):
 
         end = min(
             len(body),
-            position + 1000,
+            position + 1200,
         )
 
         context = body[
@@ -646,14 +538,13 @@ async def get_target_departure(page):
 # =========================================================
 
 def analyse_availability(text):
-
     clean = " ".join(
         text.split()
     )
 
     print(
         "Analysing departure:",
-        clean,
+        clean[:1200],
         flush=True,
     )
 
@@ -663,7 +554,6 @@ def analyse_availability(text):
     ]
 
     for pattern in patterns:
-
         match = re.search(
             pattern,
             clean,
@@ -671,7 +561,6 @@ def analyse_availability(text):
         )
 
         if match:
-
             number = int(
                 match.group(1)
             )
@@ -696,7 +585,6 @@ def analyse_availability(text):
         term in lower
         for term in sold_out_terms
     ):
-
         return False, 0
 
     return False, None
@@ -707,9 +595,8 @@ def analyse_availability(text):
 # =========================================================
 
 async def check(page):
-
     print(
-        "\n================================",
+        "\n==============================",
         flush=True,
     )
 
@@ -732,28 +619,19 @@ async def check(page):
         flush=True,
     )
 
-    await page.wait_for_timeout(
-        2500
-    )
+    await page.wait_for_timeout(2500)
 
-    await dismiss_cookies(
-        page
-    )
+    await dismiss_cookies(page)
 
-    await move_to_target_date(
-        page
-    )
+    await move_to_target_date(page)
 
-    await page.wait_for_timeout(
-        1500
-    )
+    await page.wait_for_timeout(1500)
 
     departure = await get_target_departure(
         page
     )
 
     if not departure:
-
         raise RuntimeError(
             "19:00 departure card could not "
             "be identified."
@@ -780,12 +658,10 @@ async def check(page):
 # =========================================================
 
 async def main():
-
     if (
         not TELEGRAM_BOT_TOKEN
         or not TELEGRAM_CHAT_ID
     ):
-
         raise RuntimeError(
             "Telegram Railway variables missing."
         )
@@ -798,7 +674,6 @@ async def main():
     )
 
     async with async_playwright() as p:
-
         browser = await p.chromium.launch(
             headless=True,
             args=[
@@ -819,30 +694,28 @@ async def main():
         already_alerted = False
 
         while True:
-
             try:
-
                 available, count = (
                     await check(page)
                 )
 
-                # Temporary diagnostic
+                # TEMPORARY TEST MESSAGE
                 send_telegram(
                     "🔎 Praamid check successful!\n\n"
                     f"{TARGET_ROUTE}\n"
-                    "19.08.2026 at 19:00\n"
+                    f"{TARGET_DATE.strftime('%d.%m.%Y')} "
+                    f"at {TARGET_TIME}\n"
                     f"Sõiduauto result: {count}"
                 )
 
                 if available:
-
                     if not already_alerted:
-
                         send_telegram(
                             "🚨🚨🚨 PRAAMIPILET "
                             "AVAILABLE 🚨🚨🚨\n\n"
                             f"{TARGET_ROUTE}\n"
-                            "19.08.2026 at 19:00\n"
+                            f"{TARGET_DATE.strftime('%d.%m.%Y')} "
+                            f"at {TARGET_TIME}\n"
                             f"Sõiduauto: {count}\n\n"
                             "BUY NOW:\n"
                             + PRAAMID_URL
@@ -851,11 +724,9 @@ async def main():
                         already_alerted = True
 
                 else:
-
                     already_alerted = False
 
             except Exception as error:
-
                 print(
                     "CHECK ERROR:",
                     repr(error),
@@ -863,7 +734,6 @@ async def main():
                 )
 
                 try:
-
                     send_telegram(
                         "⚠️ PRAAMID CHECK ERROR\n\n"
                         f"{type(error).__name__}\n"
