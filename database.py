@@ -1,19 +1,13 @@
 import os
-from contextlib import contextmanager
-
 import psycopg
 from psycopg.rows import dict_row
+from contextlib import contextmanager
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 
-
 @contextmanager
 def get_conn():
-    conn = psycopg.connect(
-        DATABASE_URL,
-        row_factory=dict_row,
-        autocommit=False,
-    )
+    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
     try:
         yield conn
         conn.commit()
@@ -23,12 +17,10 @@ def get_conn():
     finally:
         conn.close()
 
-
 def init_db():
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id BIGSERIAL PRIMARY KEY,
                     phone_number TEXT UNIQUE NOT NULL,
@@ -36,11 +28,8 @@ def init_db():
                     phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
-                """
-            )
-
-            cur.execute(
-                """
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS trackers (
                     id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -53,33 +42,16 @@ def init_db():
                     last_count INTEGER,
                     last_checked_at TIMESTAMPTZ,
                     last_error TEXT,
+                    alert_sent BOOLEAN NOT NULL DEFAULT FALSE,
+                    alert_sent_at TIMESTAMPTZ,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    UNIQUE (
-                        user_id,
-                        direction,
-                        travel_date,
-                        departure_time,
-                        vehicle_type
-                    )
+                    UNIQUE(user_id, direction, travel_date, departure_time, vehicle_type)
                 )
-                """
-            )
-
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS alerts (
-                    id BIGSERIAL PRIMARY KEY,
-                    tracker_id BIGINT NOT NULL REFERENCES trackers(id) ON DELETE CASCADE,
-                    availability_count INTEGER,
-                    channel TEXT NOT NULL DEFAULT 'sms',
-                    sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-
-            cur.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_trackers_open
-                ON trackers(user_id, status, travel_date, departure_time)
-                """
-            )
+            """)
+            # Safe migration for an existing DB.
+            cur.execute("ALTER TABLE trackers ADD COLUMN IF NOT EXISTS alert_sent BOOLEAN NOT NULL DEFAULT FALSE")
+            cur.execute("ALTER TABLE trackers ADD COLUMN IF NOT EXISTS alert_sent_at TIMESTAMPTZ")
+            cur.execute("ALTER TABLE trackers ADD COLUMN IF NOT EXISTS last_error TEXT")
+            cur.execute("ALTER TABLE trackers ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ")
+            cur.execute("ALTER TABLE trackers ADD COLUMN IF NOT EXISTS last_available BOOLEAN")
+            cur.execute("ALTER TABLE trackers ADD COLUMN IF NOT EXISTS last_count INTEGER")

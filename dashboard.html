@@ -1,0 +1,55 @@
+<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+:root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#667085;--line:#e4e7ec;--blue:#1f6feb;--green:#157347;--red:#b42318}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+.wrap{max-width:900px;margin:auto;padding:28px 14px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
+h1,h2{margin-top:0}.muted{color:var(--muted)}label{display:block;font-weight:650;font-size:14px;margin-bottom:6px}
+input,select{width:100%;height:46px;border:1px solid var(--line);border-radius:11px;padding:0 12px;font:inherit;background:#fff}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.btn,button{border:0;border-radius:11px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:var(--blue);color:#fff}.ghost{background:#eef2f6}.danger{background:#fff1f0;color:var(--red)}
+.row{display:flex;justify-content:space-between;gap:15px;align-items:center}.tracker{border-top:1px solid var(--line);padding:16px 0}.tracker:first-of-type{border-top:0}
+.flash{padding:10px 12px;border-radius:10px;margin-bottom:12px}.success{background:#edf8f2;color:var(--green)}.error{background:#fff1f0;color:var(--red)}
+.badge{display:inline-block;background:#eef5ff;color:var(--blue);padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700}.actions{display:flex;gap:7px}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.row{align-items:flex-start}.tracker.row{flex-direction:column}.actions{width:100%}}
+</style>
+<main class="wrap">
+<div class="row"><div><h1>⛴️ Praamid Tracker</h1><div class="muted">{{user.phone_number}}</div></div><form method="post" action="/logout"><button class="ghost">Log out</button></form></div>
+<br>
+{% for c,m in get_flashed_messages(with_categories=true) %}<div class="flash {{c}}">{{m}}</div>{% endfor %}
+<div class="card"><h2>Add tracker</h2><p class="muted">Maximum 5 open trackers. Departure times are loaded from Praamid.ee for the selected route and date.</p>
+{% if can_add %}
+<form method="post" action="/trackers">
+<div class="grid">
+<div><label>Route</label><select name="direction" id="direction">{% for code,name in routes.items() %}<option value="{{code}}">{{name}}</option>{% endfor %}</select></div>
+<div><label>Date</label><input type="date" name="travel_date" id="travel_date" min="{{today}}" required></div>
+<div><label>Departure</label><select name="departure_time" id="departure_time" disabled required><option value="">Select route and date first</option></select><div id="status" class="muted" style="font-size:13px;margin-top:6px"></div></div>
+</div><br><button class="primary" id="add" disabled>+ Start tracking</button>
+</form>
+{% else %}<div class="flash error">You already have 5 open trackers.</div>{% endif %}
+</div>
+<div class="card"><h2>Your trackers</h2>
+{% if not trackers %}<p class="muted">No active trackers.</p>{% endif %}
+{% for t in trackers %}
+<div class="tracker row"><div><strong>{{routes[t.direction]}}</strong><div class="muted">{{t.travel_date.strftime('%d.%m.%Y')}} · {{t.departure_time.strftime('%H:%M')}} · Passenger car</div><br>
+{% if t.alert_sent %}<span class="badge" style="background:#edf8f2;color:#157347">Alert sent · still monitoring</span>
+{% elif t.status == 'paused' %}<span class="badge">Paused</span>
+{% else %}<span class="badge">Watching</span>{% endif %}
+{% if t.last_checked_at %}<div class="muted" style="font-size:13px;margin-top:7px">Last checked: {{t.last_checked_at.strftime('%d.%m.%Y %H:%M')}}</div>{% endif %}
+</div><div class="actions"><form method="post" action="/trackers/{{t.id}}/toggle"><button class="ghost">{% if t.status=='active' %}Pause{% else %}Resume{% endif %}</button></form><form method="post" action="/trackers/{{t.id}}/delete"><button class="danger">Delete</button></form></div></div>
+{% endfor %}
+</div></main>
+<script>
+const route=document.getElementById('direction'), date=document.getElementById('travel_date'), dep=document.getElementById('departure_time'), status=document.getElementById('status'), add=document.getElementById('add');
+async function loadTimes(){
+ if(!route||!date||!dep)return;
+ dep.disabled=true; add.disabled=true; dep.innerHTML='<option>Loading…</option>';
+ if(!date.value){dep.innerHTML='<option value="">Select route and date first</option>';status.textContent='';return;}
+ status.textContent='Loading scheduled departures…';
+ try{
+  const r=await fetch('/api/departures?direction='+encodeURIComponent(route.value)+'&date='+encodeURIComponent(date.value));
+  const d=await r.json(); if(!r.ok||!d.ok)throw new Error(d.error||'Could not load departures');
+  dep.innerHTML='<option value="">Choose departure</option>';
+  d.departures.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;dep.appendChild(o);});
+  dep.disabled=!d.departures.length; status.textContent=d.departures.length?d.departures.length+' scheduled departure(s) found.':'No departures found.';
+ }catch(e){dep.innerHTML='<option value="">Could not load departures</option>';status.textContent=e.message;}
+}
+if(route)route.addEventListener('change',loadTimes); if(date)date.addEventListener('change',loadTimes); if(dep)dep.addEventListener('change',()=>add.disabled=!dep.value);
+</script>
