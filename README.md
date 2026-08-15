@@ -1,18 +1,27 @@
-# Praamid Tracker — professional update
+# Praamid.ee Tracker bilingual update
 
-Changes:
-- Last checked time is explicitly displayed in Europe/Tallinn time.
-- Randomized worker interval is 2–3 minutes.
-- When availability is detected, the SMS is submitted to Twilio and that exact tracker is removed from PostgreSQL.
-- The SMS tells the user the tracker has been removed and to add it again if they miss the ticket.
-- If the Twilio API call itself fails, the tracker is kept and retried later.
-- More polished responsive UI.
-- Maximum 5 open trackers per user remains.
-- Past departures are automatically removed.
+Default language: Estonian (`et`).
 
-IMPORTANT: If Railway already has interval variables, set:
+Users can switch between ET and EN. The selected language:
+- changes the UI,
+- is stored in `users.language`,
+- persists after login,
+- controls the availability SMS language.
+
+Important: `praamid.py` is the already-working scraper and was not rewritten for this update.
+
+Replace these files in GitHub:
+- app.py
+- database.py
+- worker.py
+- templates/dashboard.html
+- templates/login.html
+- templates/signup.html
+- templates/verify.html
+- templates/create_password.html
+
+You can also upload the full package, including the unchanged working `praamid.py`.
+
+Worker variables remain:
 CHECK_MIN_SECONDS=120
 CHECK_MAX_SECONDS=180
-
-Worker start command:
-python worker.py
