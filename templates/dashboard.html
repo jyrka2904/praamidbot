@@ -1,48 +1,1613 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Praamid Tracker</title>
+
 <style>
-:root{--bg:#f4f7fb;--card:#fff;--text:#172033;--muted:#667085;--line:#e4e7ec;--blue:#1769e0;--blue2:#0f56bd;--blueSoft:#eef5ff;--green:#147a4b;--greenSoft:#edf9f3;--red:#b42318;--redSoft:#fff1f0;--shadow:0 14px 36px rgba(31,50,78,.07)}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top left,rgba(23,105,224,.08),transparent 34rem),var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{width:min(1040px,calc(100% - 28px));margin:auto;padding:34px 0 64px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}.brand{display:flex;gap:12px;align-items:center}.logo{width:46px;height:46px;border-radius:14px;background:var(--blue);display:grid;place-items:center;color:#fff;font-size:24px;box-shadow:0 10px 22px rgba(23,105,224,.22)}.brand-title{font-size:24px;font-weight:780;letter-spacing:-.03em}.brand-sub{font-size:13px;color:var(--muted);margin-top:2px}.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px;margin-bottom:18px;box-shadow:var(--shadow)}h2{margin:0 0 5px;font-size:20px;letter-spacing:-.02em}.subtitle{margin:0;color:var(--muted);line-height:1.5}.card-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:20px}.grid{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:14px}label{display:block;margin-bottom:7px;font-size:13px;font-weight:700;color:#344054}input,select{width:100%;height:48px;border:1px solid #d8e0ea;border-radius:13px;background:#fff;padding:0 13px;font:inherit;color:var(--text);outline:none}input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(23,105,224,.11)}button{font:inherit;border:0;cursor:pointer}.btn{min-height:43px;padding:0 16px;border-radius:12px;font-weight:730;display:inline-flex;align-items:center;justify-content:center}.primary{background:var(--blue);color:#fff}.primary:hover{background:var(--blue2)}.primary:disabled{opacity:.45;cursor:not-allowed}.ghost{background:#f0f3f7;color:#344054}.danger{background:var(--redSoft);color:var(--red)}.footer{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:18px}.hint{font-size:13px;color:var(--muted)}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:6px}.flash{padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:14px}.success{background:var(--greenSoft);color:var(--green)}.error{background:var(--redSoft);color:var(--red)}.count{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:var(--blueSoft);color:var(--blue);font-size:12px;font-weight:700}.trackers{display:grid;gap:12px}.tracker{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;padding:17px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(#fff,#fbfcfe)}.route{display:flex;gap:9px;align-items:center;font-weight:750}.routeicon{width:32px;height:32px;border-radius:9px;background:var(--blueSoft);display:grid;place-items:center}.meta{margin-top:6px;color:var(--muted);font-size:14px}.badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}.badge{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:var(--blueSoft);color:var(--blue);font-size:12px;font-weight:700}.badge.neutral{background:#f2f4f7;color:#667085}.badge.err{background:var(--redSoft);color:var(--red)}.actions{display:flex;gap:7px}.empty{text-align:center;color:var(--muted);padding:34px 10px}.helper{min-height:18px;margin-top:6px;font-size:12px;color:var(--muted)}
-@media(max-width:760px){.shell{width:min(100% - 18px,1040px);padding-top:18px}.grid{grid-template-columns:1fr}.tracker{grid-template-columns:1fr}.actions{width:100%}.actions form{flex:1}.actions .btn{width:100%}.footer{flex-direction:column;align-items:stretch}.footer .btn{width:100%}.card{padding:19px;border-radius:18px}.brand-title{font-size:21px}}
+:root{
+    --navy:#102a56;
+    --navy-2:#183b72;
+    --blue:#1267e8;
+    --blue-2:#2f7df0;
+    --blue-soft:#edf5ff;
+    --blue-line:#d7e7fb;
+    --page:#f4f8fd;
+    --card:#ffffff;
+    --text:#13233f;
+    --muted:#6f7f98;
+    --line:#e6edf6;
+    --success:#10925f;
+    --success-soft:#eaf8f1;
+    --danger:#e5484d;
+    --danger-soft:#fff0f1;
+    --shadow:0 14px 42px rgba(41,75,124,.08);
+}
+
+*{
+    box-sizing:border-box;
+}
+
+html,body{
+    margin:0;
+    min-height:100%;
+}
+
+body{
+    color:var(--text);
+    background:
+        radial-gradient(circle at 20% 0%, rgba(68,143,241,.10), transparent 26rem),
+        linear-gradient(180deg,#f8fbff 0,#f3f7fc 100%);
+    font-family:
+        Inter,
+        ui-sans-serif,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+}
+
+button,
+input,
+select{
+    font:inherit;
+}
+
+button{
+    cursor:pointer;
+}
+
+.app{
+    min-height:100vh;
+}
+
+.hero{
+    position:relative;
+    overflow:hidden;
+    min-height:126px;
+    border-bottom:1px solid rgba(183,205,234,.65);
+    background:
+        linear-gradient(180deg,#f8fbff 0%,#eef6ff 100%);
+}
+
+.hero-inner{
+    position:relative;
+    z-index:2;
+    width:min(1460px,calc(100% - 56px));
+    height:126px;
+    margin:auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:24px;
+}
+
+.brand{
+    display:flex;
+    align-items:center;
+    gap:16px;
+}
+
+.brand-mark{
+    width:66px;
+    height:66px;
+    border-radius:18px;
+    background:
+        linear-gradient(145deg,#2d83f6,#075de0);
+    display:grid;
+    place-items:center;
+    box-shadow:
+        0 10px 25px rgba(18,103,232,.23);
+}
+
+.brand-mark svg{
+    width:42px;
+    height:42px;
+}
+
+.brand-title{
+    font-size:30px;
+    line-height:1;
+    letter-spacing:-.045em;
+    font-weight:800;
+    margin:0;
+}
+
+.brand-subtitle{
+    color:#60718c;
+    margin-top:8px;
+    font-size:15px;
+}
+
+.account-actions{
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.user-chip{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-height:48px;
+    padding:0 15px;
+    background:rgba(255,255,255,.76);
+    border:1px solid #dbe7f5;
+    border-radius:13px;
+    backdrop-filter:blur(10px);
+}
+
+.user-avatar{
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    background:var(--blue-soft);
+    color:var(--blue);
+    font-size:15px;
+    font-weight:800;
+}
+
+.user-phone{
+    font-size:13px;
+    font-weight:700;
+    color:#314767;
+}
+
+.logout-btn{
+    min-height:48px;
+    padding:0 18px;
+    border:1px solid #d7e3f2;
+    background:#fff;
+    color:var(--text);
+    border-radius:13px;
+    font-weight:750;
+    box-shadow:0 6px 18px rgba(44,74,113,.05);
+}
+
+.logout-btn:hover{
+    background:#f8fbff;
+}
+
+.hero-art{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+}
+
+.island{
+    position:absolute;
+    bottom:-2px;
+    left:38%;
+    width:160px;
+    height:36px;
+    border-radius:50% 50% 0 0;
+    background:#bfd4ea;
+    opacity:.7;
+}
+
+.ferry{
+    position:absolute;
+    left:57%;
+    bottom:5px;
+    width:206px;
+    height:92px;
+}
+
+.lighthouse{
+    position:absolute;
+    left:42%;
+    bottom:9px;
+    width:62px;
+    height:74px;
+}
+
+.cloud{
+    position:absolute;
+    width:90px;
+    height:26px;
+    background:rgba(255,255,255,.80);
+    border-radius:30px;
+}
+
+.cloud:before,
+.cloud:after{
+    content:"";
+    position:absolute;
+    border-radius:50%;
+    background:inherit;
+}
+
+.cloud:before{
+    width:32px;
+    height:32px;
+    left:18px;
+    bottom:4px;
+}
+
+.cloud:after{
+    width:42px;
+    height:42px;
+    right:15px;
+    bottom:2px;
+}
+
+.cloud.c1{
+    left:28%;
+    top:22px;
+}
+
+.cloud.c2{
+    left:66%;
+    top:16px;
+    transform:scale(.74);
+}
+
+.bird{
+    position:absolute;
+    color:#70a8eb;
+    font-weight:900;
+    font-size:22px;
+}
+
+.b1{
+    left:47%;
+    top:28px;
+}
+
+.b2{
+    left:30%;
+    top:57px;
+    transform:scale(.72);
+}
+
+.main{
+    width:min(1460px,calc(100% - 56px));
+    margin:22px auto 0;
+    padding-bottom:56px;
+}
+
+.flash{
+    display:flex;
+    align-items:center;
+    gap:13px;
+    padding:16px 19px;
+    border-radius:15px;
+    margin-bottom:20px;
+    border:1px solid transparent;
+    box-shadow:0 8px 24px rgba(48,80,119,.04);
+}
+
+.flash.success{
+    background:#f1fbf7;
+    border-color:#cfeee1;
+    color:#146f4e;
+}
+
+.flash.error{
+    background:#fff4f4;
+    border-color:#ffdada;
+    color:#a63034;
+}
+
+.flash-icon{
+    width:34px;
+    height:34px;
+    flex:0 0 34px;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    background:#18a66e;
+    color:#fff;
+    font-weight:900;
+}
+
+.layout{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 340px;
+    gap:20px;
+    align-items:start;
+}
+
+.left-column{
+    min-width:0;
+}
+
+.side-column{
+    display:grid;
+    gap:20px;
+}
+
+.card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:20px;
+    box-shadow:var(--shadow);
+}
+
+.tracker-create{
+    padding:24px 26px;
+    margin-bottom:20px;
+}
+
+.section-title{
+    display:flex;
+    align-items:center;
+    gap:13px;
+}
+
+.section-icon{
+    width:44px;
+    height:44px;
+    border-radius:13px;
+    background:var(--blue-soft);
+    color:var(--blue);
+    display:grid;
+    place-items:center;
+}
+
+.section-icon svg{
+    width:25px;
+    height:25px;
+}
+
+.section-title h2{
+    margin:0;
+    font-size:21px;
+    letter-spacing:-.025em;
+}
+
+.section-subtitle{
+    margin:5px 0 0;
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.45;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1.1fr .92fr 1fr;
+    gap:16px;
+    margin-top:24px;
+}
+
+label{
+    display:block;
+    margin-bottom:7px;
+    font-size:13px;
+    color:#2c3e59;
+    font-weight:750;
+}
+
+.field{
+    position:relative;
+}
+
+select,
+input{
+    width:100%;
+    min-height:50px;
+    border:1px solid #d9e4f1;
+    border-radius:13px;
+    background:#fff;
+    color:var(--text);
+    padding:0 14px;
+    outline:none;
+    transition:.16s ease;
+}
+
+select:focus,
+input:focus{
+    border-color:#6da8f2;
+    box-shadow:0 0 0 4px rgba(18,103,232,.09);
+}
+
+select:disabled{
+    color:#7d8ba2;
+    background:#fafcff;
+}
+
+.helper{
+    min-height:18px;
+    margin-top:6px;
+    color:#7b8ba2;
+    font-size:12px;
+}
+
+.form-bottom{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-top:18px;
+}
+
+.form-note{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    color:#60718b;
+    font-size:13px;
+}
+
+.info-dot{
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    background:var(--blue-soft);
+    color:var(--blue);
+    font-size:11px;
+    font-weight:900;
+}
+
+.start-btn{
+    min-height:48px;
+    padding:0 20px;
+    border:none;
+    border-radius:12px;
+    color:#fff;
+    background:linear-gradient(180deg,#287bf0,#1267e8);
+    font-weight:800;
+    box-shadow:0 9px 19px rgba(18,103,232,.20);
+}
+
+.start-btn:hover{
+    background:linear-gradient(180deg,#1f72e7,#0f5fd8);
+}
+
+.start-btn:disabled{
+    opacity:.45;
+    cursor:not-allowed;
+    box-shadow:none;
+}
+
+.trackers-card{
+    padding:22px 20px 18px;
+}
+
+.trackers-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    padding:0 4px 18px;
+}
+
+.active-count{
+    flex:0 0 auto;
+    background:var(--success-soft);
+    color:var(--success);
+    padding:7px 12px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:800;
+}
+
+.tracker-list{
+    display:grid;
+    gap:8px;
+}
+
+.tracker-row{
+    display:grid;
+    grid-template-columns:minmax(230px,1.35fr) minmax(155px,.8fr) minmax(120px,.7fr) auto;
+    gap:16px;
+    align-items:center;
+    padding:15px 14px;
+    border:1px solid #e4ebf4;
+    border-radius:14px;
+    background:linear-gradient(180deg,#fff,#fbfdff);
+}
+
+.route-cell{
+    display:flex;
+    align-items:center;
+    gap:13px;
+    min-width:0;
+}
+
+.route-icon{
+    width:44px;
+    height:44px;
+    flex:0 0 44px;
+    border-radius:13px;
+    background:#edf5ff;
+    display:grid;
+    place-items:center;
+    color:var(--blue);
+}
+
+.route-icon svg{
+    width:25px;
+    height:25px;
+}
+
+.route-name{
+    font-size:16px;
+    font-weight:800;
+    line-height:1.2;
+}
+
+.route-meta{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    flex-wrap:wrap;
+    margin-top:7px;
+    color:#687b98;
+    font-size:12px;
+}
+
+.status-cell{
+    min-width:0;
+}
+
+.monitoring-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:5px 10px;
+    border-radius:999px;
+    background:#e7f8ef;
+    color:#138252;
+    font-size:12px;
+    font-weight:800;
+}
+
+.monitoring-badge.paused{
+    background:#f1f3f7;
+    color:#667085;
+}
+
+.monitoring-dot{
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:#1cad71;
+}
+
+.status-caption{
+    margin-top:6px;
+    color:#68809e;
+    font-size:12px;
+}
+
+.last-cell{
+    font-size:12px;
+    color:#6b7b92;
+    line-height:1.38;
+}
+
+.last-cell strong{
+    display:block;
+    margin-top:2px;
+    color:#173059;
+    font-size:13px;
+}
+
+.actions-cell{
+    display:flex;
+    gap:8px;
+    justify-content:flex-end;
+}
+
+.small-btn{
+    min-height:39px;
+    padding:0 13px;
+    border-radius:10px;
+    font-size:12px;
+    font-weight:800;
+}
+
+.pause-btn{
+    border:1px solid #d8e4f2;
+    background:#fff;
+    color:#275080;
+}
+
+.remove-btn{
+    border:1px solid #ffd9dc;
+    background:#fff3f4;
+    color:#e33d45;
+}
+
+.empty{
+    padding:38px 16px;
+    color:#77869b;
+    text-align:center;
+}
+
+.side-card{
+    overflow:hidden;
+}
+
+.side-content{
+    padding:23px 22px 19px;
+}
+
+.side-title{
+    display:flex;
+    align-items:center;
+    gap:11px;
+    margin:0 0 18px;
+    font-size:16px;
+    font-weight:800;
+}
+
+.side-title-icon{
+    width:36px;
+    height:36px;
+    border-radius:11px;
+    background:#edf5ff;
+    color:var(--blue);
+    display:grid;
+    place-items:center;
+    font-size:19px;
+}
+
+.steps{
+    display:grid;
+    gap:16px;
+}
+
+.step{
+    display:grid;
+    grid-template-columns:28px 1fr;
+    gap:10px;
+    align-items:start;
+}
+
+.step-num{
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    border:1px solid #cfe1f7;
+    background:#f8fbff;
+    color:var(--blue);
+    font-size:12px;
+    font-weight:900;
+}
+
+.step-text{
+    color:#35506f;
+    font-size:13px;
+    line-height:1.45;
+    padding-top:4px;
+}
+
+.side-art{
+    position:relative;
+    height:118px;
+    overflow:hidden;
+    background:
+        linear-gradient(180deg,#f8fbff 0,#edf6ff 100%);
+}
+
+.side-art:after{
+    content:"";
+    position:absolute;
+    left:-10%;
+    right:-10%;
+    bottom:-40px;
+    height:80px;
+    border-radius:50%;
+    background:#8ec0f4;
+    box-shadow:
+        0 -16px 0 #c9e2fa,
+        0 -31px 0 #e8f4ff;
+}
+
+.side-ferry{
+    position:absolute;
+    z-index:2;
+    left:50%;
+    bottom:12px;
+    transform:translateX(-50%);
+    width:118px;
+}
+
+.good-list{
+    display:grid;
+    gap:14px;
+    color:#39536f;
+    font-size:13px;
+    line-height:1.45;
+}
+
+.good-item{
+    display:grid;
+    grid-template-columns:18px 1fr;
+    gap:9px;
+}
+
+.check{
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:#1b6ee8;
+    color:#fff;
+    display:grid;
+    place-items:center;
+    font-size:10px;
+    margin-top:1px;
+}
+
+.lighthouse-art{
+    height:82px;
+    position:relative;
+    overflow:hidden;
+}
+
+.lighthouse-small{
+    position:absolute;
+    right:14px;
+    bottom:-3px;
+    width:58px;
+    height:78px;
+}
+
+.lighthouse-art:before{
+    content:"";
+    position:absolute;
+    left:-6%;
+    right:-8%;
+    bottom:-47px;
+    height:65px;
+    border-radius:50%;
+    background:#88b8ed;
+    box-shadow:
+        0 -13px 0 #bed8f4,
+        0 -25px 0 #e9f3fd;
+}
+
+.page-waves{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:-54px;
+    height:100px;
+    pointer-events:none;
+    opacity:.7;
+}
+
+.wave{
+    position:absolute;
+    left:-4%;
+    width:108%;
+    height:90px;
+    border-radius:50%;
+}
+
+.wave.w1{
+    bottom:0;
+    background:#b8d9fb;
+}
+
+.wave.w2{
+    bottom:17px;
+    background:#d4e9ff;
+}
+
+@media(max-width:1120px){
+    .layout{
+        grid-template-columns:1fr;
+    }
+
+    .side-column{
+        grid-template-columns:1fr 1fr;
+    }
+}
+
+@media(max-width:850px){
+    .hero-inner,
+    .main{
+        width:min(100% - 26px,1460px);
+    }
+
+    .hero-art .ferry,
+    .hero-art .lighthouse,
+    .hero-art .island,
+    .hero-art .cloud,
+    .hero-art .bird{
+        opacity:.35;
+    }
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+
+    .tracker-row{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .route-cell{
+        grid-column:1/-1;
+    }
+
+    .actions-cell{
+        justify-content:flex-start;
+    }
+}
+
+@media(max-width:640px){
+    .hero{
+        min-height:108px;
+    }
+
+    .hero-inner{
+        height:108px;
+    }
+
+    .brand-mark{
+        width:54px;
+        height:54px;
+        border-radius:15px;
+    }
+
+    .brand-title{
+        font-size:23px;
+    }
+
+    .brand-subtitle,
+    .user-chip{
+        display:none;
+    }
+
+    .logout-btn{
+        min-height:44px;
+        padding:0 13px;
+    }
+
+    .main{
+        margin-top:14px;
+    }
+
+    .tracker-create,
+    .trackers-card{
+        padding:18px 15px;
+        border-radius:16px;
+    }
+
+    .form-bottom{
+        flex-direction:column;
+        align-items:stretch;
+    }
+
+    .start-btn{
+        width:100%;
+    }
+
+    .trackers-head{
+        flex-direction:column;
+        align-items:flex-start;
+    }
+
+    .tracker-row{
+        grid-template-columns:1fr;
+    }
+
+    .route-cell{
+        grid-column:auto;
+    }
+
+    .side-column{
+        grid-template-columns:1fr;
+    }
+
+    .actions-cell form{
+        flex:1;
+    }
+
+    .small-btn{
+        width:100%;
+    }
+}
 </style>
 </head>
+
 <body>
-<main class="shell">
-<header class="topbar"><div class="brand"><div class="logo">⛴</div><div><div class="brand-title">Praamid Tracker</div><div class="brand-sub">Ferry availability alerts</div></div></div><form method="post" action="/logout"><button class="btn ghost">Log out</button></form></header>
 
-{% for c,m in get_flashed_messages(with_categories=true) %}<div class="flash {{c}}">{{m}}</div>{% endfor %}
+<div class="app">
 
-<section class="card">
-<div class="card-head"><div><h2>Create a tracker</h2><p class="subtitle">Choose a scheduled departure and we'll monitor passenger-car availability automatically.</p></div></div>
-{% if can_add %}
-<form method="post" action="/trackers">
-<div class="grid">
-<div><label>Route</label><select name="direction" id="direction">{% for code,name in routes.items() %}<option value="{{code}}">{{name}}</option>{% endfor %}</select></div>
-<div><label>Date</label><input type="date" name="travel_date" id="travel_date" min="{{today}}" required></div>
-<div><label>Departure</label><select name="departure_time" id="departure_time" disabled required><option value="">Select route and date first</option></select><div id="status" class="helper"></div></div>
-</div>
-<div class="footer"><div class="hint"><span class="dot"></span>Up to {{max_open}} trackers · checked every 2–3 minutes</div><button class="btn primary" id="add" disabled>+ Start tracking</button></div>
-</form>
-{% else %}<div class="flash error">You've reached the maximum of {{max_open}} open trackers.</div>{% endif %}
-</section>
+<header class="hero">
+    <div class="hero-art">
+        <div class="cloud c1"></div>
+        <div class="cloud c2"></div>
+        <div class="bird b1">⌁</div>
+        <div class="bird b2">⌁</div>
+        <div class="island"></div>
 
-<section class="card">
-<div class="card-head"><div><h2>Active trackers</h2><p class="subtitle">When availability is found, we'll submit an SMS alert and remove that tracker automatically.</p></div><span class="count">{{trackers|length}} / {{max_open}} active</span></div>
-<div class="trackers">
-{% if not trackers %}<div class="empty"><div style="font-size:32px;margin-bottom:8px">🌊</div><strong>No active trackers</strong><div style="margin-top:7px">Add a ferry above and we'll start watching it.</div></div>{% endif %}
-{% for t in trackers %}
-<article class="tracker"><div><div class="route"><span class="routeicon">⛴</span>{{routes[t.direction]}}</div><div class="meta">{{t.travel_date.strftime('%d.%m.%Y')}} · {{t.departure_time.strftime('%H:%M')}} · Passenger car</div><div class="badges">{% if t.status=='paused' %}<span class="badge neutral">⏸ Paused</span>{% else %}<span class="badge">● Monitoring</span>{% endif %}{% if t.last_checked_display %}<span class="badge neutral">Last checked {{t.last_checked_display}}</span>{% endif %}{% if t.last_count is not none %}<span class="badge neutral">Last result: {{t.last_count}} available</span>{% endif %}{% if t.last_error %}<span class="badge err">Check error</span>{% endif %}</div></div><div class="actions"><form method="post" action="/trackers/{{t.id}}/toggle"><button class="btn ghost">{% if t.status=='active' %}Pause{% else %}Resume{% endif %}</button></form><form method="post" action="/trackers/{{t.id}}/delete"><button class="btn danger">Remove</button></form></div></article>
-{% endfor %}
-</div>
-</section>
+        <svg class="lighthouse" viewBox="0 0 80 100" aria-hidden="true">
+            <path d="M29 93h24L48 26H34z" fill="#fff"/>
+            <path d="M31 72h20l-2-18H33z" fill="#f36b61"/>
+            <path d="M34 26h14l-3-10h-8z" fill="#17396f"/>
+            <rect x="33" y="21" width="16" height="7" rx="2" fill="#f36b61"/>
+            <path d="M37 14h8l-4-8z" fill="#17396f"/>
+            <ellipse cx="41" cy="94" rx="30" ry="8" fill="#a9c8e9"/>
+        </svg>
+
+        <svg class="ferry" viewBox="0 0 260 120" aria-hidden="true">
+            <path d="M38 80h177l-18 25H57z" fill="#1759a7"/>
+            <path d="M58 51h128l18 29H42z" fill="#fff"/>
+            <rect x="75" y="34" width="92" height="22" rx="4" fill="#fff"/>
+            <rect x="87" y="21" width="63" height="18" rx="4" fill="#fff"/>
+            <rect x="102" y="13" width="4" height="12" fill="#17396f"/>
+            <rect x="132" y="8" width="4" height="18" fill="#17396f"/>
+            <g fill="#2d6db8">
+                <rect x="68" y="59" width="13" height="9" rx="2"/>
+                <rect x="88" y="59" width="13" height="9" rx="2"/>
+                <rect x="108" y="59" width="13" height="9" rx="2"/>
+                <rect x="128" y="59" width="13" height="9" rx="2"/>
+                <rect x="148" y="59" width="13" height="9" rx="2"/>
+                <rect x="168" y="59" width="13" height="9" rx="2"/>
+                <rect x="93" y="28" width="12" height="7" rx="2"/>
+                <rect x="112" y="28" width="12" height="7" rx="2"/>
+                <rect x="131" y="28" width="12" height="7" rx="2"/>
+            </g>
+            <path d="M56 105h143c-18 8-39 11-67 11-30 0-55-4-76-11z" fill="#7eb4eb" opacity=".65"/>
+        </svg>
+    </div>
+
+    <div class="hero-inner">
+
+        <div class="brand">
+            <div class="brand-mark">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <path d="M11 35h42l-5 13H17z" fill="#fff"/>
+                    <path d="M17 26h29l5 9H13z" fill="#fff"/>
+                    <rect x="22" y="18" width="20" height="10" rx="2" fill="#fff"/>
+                    <rect x="29" y="12" width="3" height="7" fill="#fff"/>
+                    <rect x="35" y="9" width="3" height="10" fill="#fff"/>
+                    <path d="M14 50c6 4 12 4 18 0 6 4 12 4 18 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+            </div>
+
+            <div>
+                <div class="brand-title">Praamid Tracker</div>
+                <div class="brand-subtitle">Ferry availability alerts</div>
+            </div>
+        </div>
+
+        <div class="account-actions">
+            <div class="user-chip">
+                <div class="user-avatar">●</div>
+                <div class="user-phone">{{ user.phone_number }}</div>
+            </div>
+
+            <form method="post" action="/logout">
+                <button class="logout-btn" type="submit">↪&nbsp; Log out</button>
+            </form>
+        </div>
+
+    </div>
+</header>
+
+
+<main class="main">
+
+    {% for category,message in get_flashed_messages(with_categories=true) %}
+        <div class="flash {{ category }}">
+            <div class="flash-icon">
+                {% if category == 'success' %}✓{% else %}!{% endif %}
+            </div>
+            <div>{{ message }}</div>
+        </div>
+    {% endfor %}
+
+    <div class="layout">
+
+        <div class="left-column">
+
+            <section class="card tracker-create">
+
+                <div class="section-title">
+                    <div class="section-icon">
+                        <svg viewBox="0 0 64 64" aria-hidden="true">
+                            <path d="M11 35h42l-5 13H17z" fill="currentColor"/>
+                            <path d="M17 26h29l5 9H13z" fill="currentColor"/>
+                            <rect x="22" y="18" width="20" height="10" rx="2" fill="currentColor"/>
+                            <rect x="29" y="12" width="3" height="7" fill="currentColor"/>
+                            <rect x="35" y="9" width="3" height="10" fill="currentColor"/>
+                        </svg>
+                    </div>
+
+                    <div>
+                        <h2>Create a new tracker</h2>
+                        <p class="section-subtitle">
+                            Choose a scheduled departure and we'll monitor passenger-car availability automatically.
+                        </p>
+                    </div>
+                </div>
+
+                {% if can_add %}
+
+                <form method="post" action="/trackers">
+
+                    <div class="form-grid">
+
+                        <div class="field">
+                            <label for="direction">Route</label>
+
+                            <select
+                                name="direction"
+                                id="direction"
+                            >
+                                {% for code,name in routes.items() %}
+                                    <option value="{{ code }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+
+                        <div class="field">
+                            <label for="travel_date">Date</label>
+
+                            <input
+                                type="date"
+                                name="travel_date"
+                                id="travel_date"
+                                min="{{ today }}"
+                                required
+                            >
+                        </div>
+
+
+                        <div class="field">
+                            <label for="departure_time">Departure</label>
+
+                            <select
+                                name="departure_time"
+                                id="departure_time"
+                                disabled
+                                required
+                            >
+                                <option value="">
+                                    Select route and date first
+                                </option>
+                            </select>
+
+                            <div
+                                id="departure-status"
+                                class="helper"
+                            ></div>
+                        </div>
+
+                    </div>
+
+
+                    <div class="form-bottom">
+
+                        <div class="form-note">
+                            <span class="info-dot">i</span>
+                            <span>
+                                Up to {{ max_open }} trackers
+                                &nbsp;•&nbsp;
+                                Checked every 2–3 minutes
+                            </span>
+                        </div>
+
+                        <button
+                            class="start-btn"
+                            id="add-button"
+                            type="submit"
+                            disabled
+                        >
+                            ＋ Start tracking
+                        </button>
+
+                    </div>
+
+                </form>
+
+                {% else %}
+
+                <div class="flash error" style="margin-top:20px;margin-bottom:0">
+                    <div class="flash-icon" style="background:#df454b">!</div>
+                    <div>
+                        You've reached the maximum of {{ max_open }} active trackers.
+                        Remove one before adding another.
+                    </div>
+                </div>
+
+                {% endif %}
+
+            </section>
+
+
+            <section class="card trackers-card">
+
+                <div class="trackers-head">
+
+                    <div class="section-title">
+                        <div class="section-icon">
+                            <span style="font-size:23px">◎</span>
+                        </div>
+
+                        <div>
+                            <h2>
+                                Active trackers
+                                <span style="font-size:16px;color:#6d7c94;font-weight:700">
+                                    ({{ trackers|length }} / {{ max_open }})
+                                </span>
+                            </h2>
+
+                            <p class="section-subtitle">
+                                We'll send an SMS alert and remove the tracker when availability is found.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="active-count">
+                        {{ trackers|length }} / {{ max_open }} active
+                    </div>
+
+                </div>
+
+
+                <div class="tracker-list">
+
+                    {% if not trackers %}
+
+                        <div class="empty">
+                            <div style="font-size:34px;margin-bottom:8px">🌊</div>
+                            <strong>No active trackers</strong>
+                            <div style="margin-top:5px">
+                                Create one above and we'll start monitoring.
+                            </div>
+                        </div>
+
+                    {% endif %}
+
+
+                    {% for tracker in trackers %}
+
+                    <article class="tracker-row">
+
+                        <div class="route-cell">
+
+                            <div class="route-icon">
+                                <svg viewBox="0 0 64 64" aria-hidden="true">
+                                    <path d="M11 35h42l-5 13H17z" fill="currentColor"/>
+                                    <path d="M17 26h29l5 9H13z" fill="currentColor"/>
+                                    <rect x="22" y="18" width="20" height="10" rx="2" fill="currentColor"/>
+                                    <rect x="29" y="12" width="3" height="7" fill="currentColor"/>
+                                    <rect x="35" y="9" width="3" height="10" fill="currentColor"/>
+                                </svg>
+                            </div>
+
+
+                            <div>
+                                <div class="route-name">
+                                    {{ routes[tracker.direction] }}
+                                </div>
+
+                                <div class="route-meta">
+                                    <span>
+                                        ▣&nbsp;
+                                        {{ tracker.travel_date.strftime('%d.%m.%Y') }}
+                                    </span>
+
+                                    <span>
+                                        ◷&nbsp;
+                                        {{ tracker.departure_time.strftime('%H:%M') }}
+                                    </span>
+                                </div>
+                            </div>
+
+                        </div>
+
+
+                        <div class="status-cell">
+
+                            {% if tracker.status == 'paused' %}
+
+                                <div class="monitoring-badge paused">
+                                    ⏸ Paused
+                                </div>
+
+                                <div class="status-caption">
+                                    Monitoring temporarily paused
+                                </div>
+
+                            {% else %}
+
+                                <div class="monitoring-badge">
+                                    <span class="monitoring-dot"></span>
+                                    Monitoring
+                                </div>
+
+                                <div class="status-caption">
+                                    Checking every 2–3 min
+                                </div>
+
+                            {% endif %}
+
+                        </div>
+
+
+                        <div class="last-cell">
+
+                            Last checked
+
+                            {% if tracker.last_checked_display %}
+                                <strong>{{ tracker.last_checked_display }}</strong>
+                            {% else %}
+                                <strong>Waiting for first check</strong>
+                            {% endif %}
+
+                            {% if tracker.last_count is not none %}
+                                <span>
+                                    Last result: {{ tracker.last_count }} available
+                                </span>
+                            {% endif %}
+
+                            {% if tracker.last_error %}
+                                <span style="display:block;color:#d33a42;margin-top:3px">
+                                    Check error
+                                </span>
+                            {% endif %}
+
+                        </div>
+
+
+                        <div class="actions-cell">
+
+                            <form
+                                method="post"
+                                action="/trackers/{{ tracker.id }}/toggle"
+                            >
+                                <button
+                                    class="small-btn pause-btn"
+                                    type="submit"
+                                >
+                                    {% if tracker.status == 'active' %}
+                                        Pause
+                                    {% else %}
+                                        Resume
+                                    {% endif %}
+                                </button>
+                            </form>
+
+
+                            <form
+                                method="post"
+                                action="/trackers/{{ tracker.id }}/delete"
+                            >
+                                <button
+                                    class="small-btn remove-btn"
+                                    type="submit"
+                                >
+                                    🗑 Remove
+                                </button>
+                            </form>
+
+                        </div>
+
+                    </article>
+
+                    {% endfor %}
+
+                </div>
+
+            </section>
+
+        </div>
+
+
+        <aside class="side-column">
+
+            <section class="card side-card">
+
+                <div class="side-content">
+
+                    <div class="side-title">
+                        <div class="side-title-icon">⚓</div>
+                        <span>How it works</span>
+                    </div>
+
+                    <div class="steps">
+
+                        <div class="step">
+                            <div class="step-num">1</div>
+                            <div class="step-text">
+                                You add a departure to watch
+                            </div>
+                        </div>
+
+                        <div class="step">
+                            <div class="step-num">2</div>
+                            <div class="step-text">
+                                We check availability every 2–3 minutes
+                            </div>
+                        </div>
+
+                        <div class="step">
+                            <div class="step-num">3</div>
+                            <div class="step-text">
+                                You get an SMS when a passenger-car ticket is available
+                            </div>
+                        </div>
+
+                        <div class="step">
+                            <div class="step-num">4</div>
+                            <div class="step-text">
+                                The tracker is removed automatically
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="side-art">
+
+                    <svg class="side-ferry" viewBox="0 0 260 120" aria-hidden="true">
+                        <path d="M38 80h177l-18 25H57z" fill="#1759a7"/>
+                        <path d="M58 51h128l18 29H42z" fill="#fff"/>
+                        <rect x="75" y="34" width="92" height="22" rx="4" fill="#fff"/>
+                        <rect x="87" y="21" width="63" height="18" rx="4" fill="#fff"/>
+                        <rect x="102" y="13" width="4" height="12" fill="#17396f"/>
+                        <rect x="132" y="8" width="4" height="18" fill="#17396f"/>
+                        <g fill="#2d6db8">
+                            <rect x="68" y="59" width="13" height="9" rx="2"/>
+                            <rect x="88" y="59" width="13" height="9" rx="2"/>
+                            <rect x="108" y="59" width="13" height="9" rx="2"/>
+                            <rect x="128" y="59" width="13" height="9" rx="2"/>
+                            <rect x="148" y="59" width="13" height="9" rx="2"/>
+                            <rect x="168" y="59" width="13" height="9" rx="2"/>
+                        </g>
+                    </svg>
+
+                </div>
+
+            </section>
+
+
+            <section class="card side-card">
+
+                <div class="side-content">
+
+                    <div class="side-title">
+                        <div class="side-title-icon">◉</div>
+                        <span>Good to know</span>
+                    </div>
+
+                    <div class="good-list">
+
+                        <div class="good-item">
+                            <div class="check">✓</div>
+                            <div>
+                                Alerts are sent to your verified phone number
+                            </div>
+                        </div>
+
+                        <div class="good-item">
+                            <div class="check">✓</div>
+                            <div>
+                                You can have up to {{ max_open }} active trackers
+                            </div>
+                        </div>
+
+                        <div class="good-item">
+                            <div class="check">✓</div>
+                            <div>
+                                The tracker is removed after an alert is submitted
+                            </div>
+                        </div>
+
+                        <div class="good-item">
+                            <div class="check">✓</div>
+                            <div>
+                                If you miss the ticket, simply add the tracker again
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="lighthouse-art">
+
+                    <svg class="lighthouse-small" viewBox="0 0 80 100" aria-hidden="true">
+                        <path d="M29 93h24L48 26H34z" fill="#fff"/>
+                        <path d="M31 72h20l-2-18H33z" fill="#f36b61"/>
+                        <path d="M34 26h14l-3-10h-8z" fill="#17396f"/>
+                        <rect x="33" y="21" width="16" height="7" rx="2" fill="#f36b61"/>
+                        <path d="M37 14h8l-4-8z" fill="#17396f"/>
+                        <ellipse cx="41" cy="94" rx="30" ry="8" fill="#a9c8e9"/>
+                    </svg>
+
+                </div>
+
+            </section>
+
+        </aside>
+
+    </div>
+
 </main>
+
+<div class="page-waves">
+    <div class="wave w2"></div>
+    <div class="wave w1"></div>
+</div>
+
+</div>
+
+
 <script>
-const route=document.getElementById('direction'),date=document.getElementById('travel_date'),dep=document.getElementById('departure_time'),status=document.getElementById('status'),add=document.getElementById('add');
-async function loadTimes(){if(!route||!date||!dep)return;dep.disabled=true;add.disabled=true;dep.innerHTML='<option value="">Loading departures…</option>';if(!date.value){dep.innerHTML='<option value="">Select route and date first</option>';status.textContent='';return;}status.textContent='Checking the live Praamid.ee schedule…';try{const r=await fetch('/api/departures?direction='+encodeURIComponent(route.value)+'&date='+encodeURIComponent(date.value));const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Could not load departures');dep.innerHTML='<option value="">Choose departure</option>';d.departures.forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;dep.appendChild(o);});dep.disabled=!d.departures.length;status.textContent=d.departures.length?d.departures.length+' scheduled departure'+(d.departures.length===1?'':'s')+' found.':'No departures found.';}catch(e){dep.innerHTML='<option value="">Could not load departures</option>';status.textContent=e.message;}}
-if(route)route.addEventListener('change',loadTimes);if(date)date.addEventListener('change',loadTimes);if(dep)dep.addEventListener('change',()=>add.disabled=!dep.value);
+/*
+IMPORTANT:
+This is the SAME departure-loading behavior as before.
+Only visual markup/CSS has changed.
+*/
+
+const routeEl =
+    document.getElementById("direction");
+
+const dateEl =
+    document.getElementById("travel_date");
+
+const departureEl =
+    document.getElementById("departure_time");
+
+const statusEl =
+    document.getElementById("departure-status");
+
+const addButton =
+    document.getElementById("add-button");
+
+
+async function loadDepartures() {
+
+    if (
+        !routeEl
+        || !dateEl
+        || !departureEl
+        || !addButton
+    ) {
+        return;
+    }
+
+    departureEl.disabled = true;
+    addButton.disabled = true;
+
+    departureEl.innerHTML =
+        '<option value="">Loading departures…</option>';
+
+    statusEl.textContent = "";
+
+    if (!dateEl.value) {
+
+        departureEl.innerHTML =
+            '<option value="">Select route and date first</option>';
+
+        return;
+    }
+
+    statusEl.textContent =
+        "Checking the live Praamid.ee schedule…";
+
+    try {
+
+        const params =
+            new URLSearchParams({
+                direction: routeEl.value,
+                date: dateEl.value
+            });
+
+        const response =
+            await fetch(
+                "/api/departures?"
+                + params.toString()
+            );
+
+        const data =
+            await response.json();
+
+        if (
+            !response.ok
+            || !data.ok
+        ) {
+            throw new Error(
+                data.error
+                || "Could not load departures."
+            );
+        }
+
+        departureEl.innerHTML =
+            '<option value="">Choose departure</option>';
+
+        data.departures.forEach(
+            (time) => {
+
+                const option =
+                    document.createElement(
+                        "option"
+                    );
+
+                option.value = time;
+                option.textContent = time;
+
+                departureEl.appendChild(
+                    option
+                );
+            }
+        );
+
+        if (
+            data.departures.length
+        ) {
+
+            departureEl.disabled = false;
+
+            statusEl.textContent =
+                data.departures.length
+                + " scheduled departure"
+                + (
+                    data.departures.length
+                    === 1
+                    ? ""
+                    : "s"
+                )
+                + " found.";
+
+        } else {
+
+            departureEl.innerHTML =
+                '<option value="">No departures found</option>';
+
+            statusEl.textContent =
+                "No scheduled departures were found for this date.";
+        }
+
+    } catch (error) {
+
+        departureEl.innerHTML =
+            '<option value="">Could not load departures</option>';
+
+        statusEl.textContent =
+            error.message;
+    }
+}
+
+
+if (
+    routeEl
+    && dateEl
+) {
+
+    routeEl.addEventListener(
+        "change",
+        loadDepartures
+    );
+
+    dateEl.addEventListener(
+        "change",
+        loadDepartures
+    );
+}
+
+
+if (departureEl) {
+
+    departureEl.addEventListener(
+        "change",
+        () => {
+            addButton.disabled =
+                !departureEl.value;
+        }
+    );
+}
 </script>
-</body></html>
+
+</body>
+</html>
