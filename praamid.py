@@ -1,3 +1,4 @@
+import os
 import re
 from datetime import date
 
@@ -5,6 +6,30 @@ from playwright.sync_api import sync_playwright
 
 
 BASE = "https://www.praamid.ee/portal/ticket/departure"
+
+# Browser-level safety timeouts.
+# These are deliberately shorter than the worker watchdog.
+PLAYWRIGHT_ACTION_TIMEOUT_MS = int(
+    os.environ.get(
+        "PLAYWRIGHT_ACTION_TIMEOUT_MS",
+        "10000",
+    )
+)
+
+PLAYWRIGHT_NAVIGATION_TIMEOUT_MS = int(
+    os.environ.get(
+        "PLAYWRIGHT_NAVIGATION_TIMEOUT_MS",
+        "30000",
+    )
+)
+
+PLAYWRIGHT_BROWSER_LAUNCH_TIMEOUT_MS = int(
+    os.environ.get(
+        "PLAYWRIGHT_BROWSER_LAUNCH_TIMEOUT_MS",
+        "15000",
+    )
+)
+
 
 ROUTES = {
     "RH": "Rohuküla → Heltermaa",
@@ -74,7 +99,7 @@ def wait_for_praamid_app(page):
             page.wait_for_selector(
                 selector,
                 state="attached",
-                timeout=15000,
+                timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS,
             )
             return
 
@@ -83,7 +108,7 @@ def wait_for_praamid_app(page):
 
     body_text = (
         page.locator("body")
-        .inner_text(timeout=5000)
+        .inner_text(timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS)
     )
 
     raise RuntimeError(
@@ -106,7 +131,7 @@ def open_datepicker(page):
 
             if locator.count():
                 locator.first.click(
-                    timeout=5000
+                    timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
                 )
 
                 page.wait_for_timeout(350)
@@ -208,7 +233,7 @@ def select_target_date(
             )
 
         locator.first.click(
-            timeout=3000
+            timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
         )
 
         page.wait_for_timeout(200)
@@ -246,7 +271,7 @@ def select_target_date(
                 not in classes
             ):
                 candidate.click(
-                    timeout=3000
+                    timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
                 )
 
                 page.wait_for_timeout(
@@ -288,7 +313,7 @@ def select_target_date(
                 not in classes
             ):
                 candidate.click(
-                    timeout=3000
+                    timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
                 )
 
                 page.wait_for_timeout(
@@ -324,6 +349,7 @@ def open_praamid(
     browser = (
         playwright.chromium.launch(
             headless=True,
+            timeout=PLAYWRIGHT_BROWSER_LAUNCH_TIMEOUT_MS,
             args=[
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
@@ -340,11 +366,22 @@ def open_praamid(
         },
     )
 
+    # Applies to locator actions such as click(), inner_text(),
+    # input_value(), wait_for_selector(), etc. unless overridden.
+    page.set_default_timeout(
+        PLAYWRIGHT_ACTION_TIMEOUT_MS
+    )
+
+    # Applies to page.goto() and other navigation operations.
+    page.set_default_navigation_timeout(
+        PLAYWRIGHT_NAVIGATION_TIMEOUT_MS
+    )
+
     try:
         page.goto(
             f"{BASE}?direction={direction}",
             wait_until="domcontentloaded",
-            timeout=45000,
+            timeout=PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
         )
 
         # Critical: wait for Angular
@@ -369,10 +406,27 @@ def open_praamid(
         )
 
     except Exception:
-        browser.close()
-        playwright.stop()
+        close_browser_safely(
+            browser,
+            playwright,
+        )
         raise
 
+
+
+def close_browser_safely(
+    browser,
+    playwright,
+):
+    try:
+        browser.close()
+    except Exception:
+        pass
+
+    try:
+        playwright.stop()
+    except Exception:
+        pass
 
 def get_departure_times(
     direction,
@@ -392,7 +446,7 @@ def get_departure_times(
                     "#main-content"
                 )
                 .inner_text(
-                    timeout=5000
+                    timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
                 )
             )
 
@@ -400,7 +454,7 @@ def get_departure_times(
             text = (
                 page.locator("body")
                 .inner_text(
-                    timeout=5000
+                    timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
                 )
             )
 
@@ -424,8 +478,10 @@ def get_departure_times(
         return departures
 
     finally:
-        browser.close()
-        playwright.stop()
+        close_browser_safely(
+            browser,
+            playwright,
+        )
 
 
 def check_vehicle_availability(
@@ -500,5 +556,7 @@ def check_vehicle_availability(
         return False, None
 
     finally:
-        browser.close()
-        playwright.stop()
+        close_browser_safely(
+            browser,
+            playwright,
+        )
