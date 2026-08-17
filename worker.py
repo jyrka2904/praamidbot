@@ -36,7 +36,7 @@ MAX_WAIT = int(
 CHECK_TIMEOUT = int(
     os.environ.get(
         "TRACKER_CHECK_TIMEOUT_SECONDS",
-        "70",
+        "90",
     )
 )
 
@@ -510,6 +510,18 @@ def check_with_subprocess(t):
 
         raise RuntimeError(
             detail
+        )
+
+    attempts_used = result.get(
+        "attempts_used",
+        1,
+    )
+
+    if attempts_used > 1:
+        print(
+            f"  ↻ Check succeeded on retry "
+            f"{attempts_used}.",
+            flush=True,
         )
 
     return (

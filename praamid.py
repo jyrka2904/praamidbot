@@ -19,7 +19,7 @@ PLAYWRIGHT_ACTION_TIMEOUT_MS = int(
 PLAYWRIGHT_NAVIGATION_TIMEOUT_MS = int(
     os.environ.get(
         "PLAYWRIGHT_NAVIGATION_TIMEOUT_MS",
-        "30000",
+        "20000",
     )
 )
 
@@ -84,32 +84,38 @@ def dismiss_cookies(page):
 def wait_for_praamid_app(page):
     """
     Praamid.ee is an Angular application.
-    Wait until the actual ticket search form has rendered.
+
+    Important: wait for all known form selectors in ONE locator call.
+    The old version waited up to ACTION_TIMEOUT separately for every
+    selector, which could make one bad page consume 40-50 seconds.
     """
 
-    selectors = [
-        "app-ticket-purchase-searchbar",
-        "button.departure-select-date",
-        "#departureDate",
-        "app-datepicker",
-    ]
-
-    for selector in selectors:
-        try:
-            page.wait_for_selector(
-                selector,
-                state="attached",
-                timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS,
-            )
-            return
-
-        except Exception:
-            pass
-
-    body_text = (
-        page.locator("body")
-        .inner_text(timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS)
+    combined_selector = (
+        "app-ticket-purchase-searchbar, "
+        "button.departure-select-date, "
+        "#departureDate, "
+        "app-datepicker"
     )
+
+    try:
+        page.locator(
+            combined_selector
+        ).first.wait_for(
+            state="attached",
+            timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS,
+        )
+        return
+
+    except Exception:
+        pass
+
+    try:
+        body_text = (
+            page.locator("body")
+            .inner_text(timeout=3000)
+        )
+    except Exception:
+        body_text = "<body text unavailable>"
 
     raise RuntimeError(
         "Praamid search form did not load. "
@@ -383,6 +389,11 @@ def open_praamid(
             wait_until="domcontentloaded",
             timeout=PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
         )
+
+        # Give the Angular bootstrap a brief moment before checking
+        # the actual search form. This is intentionally short because
+        # wait_for_praamid_app() already has a bounded timeout.
+        page.wait_for_timeout(750)
 
         # Critical: wait for Angular
         # to render the real ticket form.
