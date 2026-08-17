@@ -1,17 +1,18 @@
+import json
 import os
 import random
+import signal
+import subprocess
+import sys
 import time
-import multiprocessing
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from queue import Empty
 
 from twilio.rest import Client
 
 from database import init_db, get_conn
 from praamid import (
     ROUTES,
-    check_vehicle_availability,
     BASE,
 )
 
@@ -32,12 +33,20 @@ MAX_WAIT = int(
     )
 )
 
-# A single Praamid/Chromium check is never allowed
-# to block the whole worker indefinitely.
 CHECK_TIMEOUT = int(
     os.environ.get(
         "TRACKER_CHECK_TIMEOUT_SECONDS",
         "70",
+    )
+)
+
+# After this many completed cycles, restart cleanly even if everything
+# appears healthy. With 2–3 minute cadence, 240 cycles is roughly 8–12h.
+# Railway Restart Policy=Always will start a fresh container.
+MAX_CYCLES_BEFORE_REFRESH = int(
+    os.environ.get(
+        "MAX_CYCLES_BEFORE_REFRESH",
+        "240",
     )
 )
 
@@ -51,6 +60,24 @@ MESSAGING_SID = os.environ[
 ]
 
 init_db()
+
+
+RESOURCE_EXHAUSTION_MARKERS = (
+    "Resource temporarily unavailable",
+    "can't start new thread",
+    "Cannot allocate memory",
+    "Too many open files",
+)
+
+
+def fatal_resource_error(text):
+    value = str(text)
+
+    return any(
+        marker in value
+        for marker
+        in RESOURCE_EXHAUSTION_MARKERS
+    )
 
 
 def expire_old():
@@ -77,8 +104,6 @@ def expire_old():
 def get_active():
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # Language is read from the user so the SMS
-            # follows the language selected in the web app.
             cur.execute("""
                 SELECT
                     t.*,
@@ -239,8 +264,6 @@ def send_and_remove(
     t,
     count,
 ):
-    # If Twilio rejects the request,
-    # the tracker stays active.
     msg = twilio.messages.create(
         to=t["phone_number"],
         messaging_service_sid=(
@@ -259,8 +282,6 @@ def send_and_remove(
         flush=True,
     )
 
-    # Remove only this exact tracker
-    # after Twilio accepts the request.
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -280,125 +301,134 @@ def send_and_remove(
     )
 
 
-def _availability_child(
-    result_queue,
-    direction,
-    travel_date,
-    departure_time,
-    vehicle_type,
+def kill_process_group(
+    proc,
 ):
-    """
-    Runs inside a separate process.
+    if proc.poll() is not None:
+        return
 
-    Keeping Playwright/Chromium in a child process means
-    the parent worker can terminate this process if the
-    browser or Praamid.ee ever hangs.
-    """
     try:
-        available, count = (
-            check_vehicle_availability(
-                direction,
-                travel_date,
-                departure_time,
-                vehicle_type,
-            )
+        os.killpg(
+            proc.pid,
+            signal.SIGTERM,
         )
 
-        result_queue.put(
-            {
-                "ok": True,
-                "available": available,
-                "count": count,
-            }
-        )
+    except ProcessLookupError:
+        return
 
-    except BaseException as error:
-        result_queue.put(
-            {
-                "ok": False,
-                "error": (
-                    f"{type(error).__name__}: "
-                    f"{error}"
-                ),
-            }
-        )
+    except Exception:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
 
-
-def check_with_watchdog(t):
-    """
-    Execute one Praamid check with a hard timeout.
-
-    If it hangs:
-      - terminate Chromium/Playwright child process
-      - return an error
-      - continue with the next tracker
-    """
-    dep = (
-        t["departure_time"]
-        .strftime("%H:%M")
-    )
-
-    # Railway runs Linux containers.
-    # fork avoids re-running the whole worker module
-    # inside every child process.
-    ctx = multiprocessing.get_context(
-        "fork"
-    )
-
-    result_queue = ctx.Queue(
-        maxsize=1
-    )
-
-    process = ctx.Process(
-        target=_availability_child,
-        args=(
-            result_queue,
-            t["direction"],
-            t["travel_date"],
-            dep,
-            t["vehicle_type"],
-        ),
-        daemon=True,
-    )
-
-    process.start()
-
-    process.join(
-        CHECK_TIMEOUT
-    )
-
-    if process.is_alive():
-        print(
-            f"  ⏱ Check exceeded "
-            f"{CHECK_TIMEOUT}s. "
-            "Terminating stuck browser process...",
-            flush=True,
-        )
-
-        process.terminate()
-
-        process.join(
+    try:
+        proc.wait(
             timeout=5
         )
+        return
 
-        # If Chromium/child still refuses to die,
-        # use SIGKILL as the final fallback.
-        if process.is_alive():
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(
+            proc.pid,
+            signal.SIGKILL,
+        )
+
+    except ProcessLookupError:
+        return
+
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+    try:
+        proc.wait(
+            timeout=5
+        )
+    except Exception:
+        pass
+
+
+def check_with_subprocess(t):
+    """
+    Runs one Praamid check in a disposable OS subprocess.
+
+    Important:
+    - no Python multiprocessing.Queue
+    - no feeder threads
+    - process is started in its own process group
+    - if it hangs, the whole group is killed, including Chromium descendants
+    """
+    payload = {
+        "direction": t["direction"],
+        "travel_date": (
+            t["travel_date"]
+            .isoformat()
+        ),
+        "departure_time": (
+            t["departure_time"]
+            .strftime("%H:%M")
+        ),
+        "vehicle_type": t[
+            "vehicle_type"
+        ],
+    }
+
+    try:
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-u",
+                "check_once.py",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+            bufsize=1,
+        )
+
+    except Exception as error:
+        if fatal_resource_error(
+            error
+        ):
             print(
-                "  ⚠️ Child did not terminate "
-                "cleanly; killing it.",
+                "  💥 Resource exhaustion while "
+                "starting check subprocess.",
                 flush=True,
             )
 
-            process.kill()
+            raise SystemExit(75)
 
-            process.join(
-                timeout=5
+        raise
+
+    try:
+        stdout, stderr = (
+            proc.communicate(
+                input=json.dumps(
+                    payload
+                ),
+                timeout=CHECK_TIMEOUT,
             )
+        )
 
-        # Clean up queue resources.
-        result_queue.close()
-        result_queue.join_thread()
+    except subprocess.TimeoutExpired:
+        print(
+            f"  ⏱ Check exceeded "
+            f"{CHECK_TIMEOUT}s. "
+            "Killing whole check process group...",
+            flush=True,
+        )
+
+        kill_process_group(
+            proc
+        )
 
         raise TimeoutError(
             "Praamid availability check "
@@ -406,32 +436,80 @@ def check_with_watchdog(t):
             f"{CHECK_TIMEOUT} seconds"
         )
 
-    try:
-        result = result_queue.get(
-            timeout=3
+    # The check should have completely exited by now.
+    # Kill any unexpected survivors in the same process group.
+    if proc.poll() is None:
+        kill_process_group(
+            proc
         )
 
-    except Empty:
-        exit_code = (
-            process.exitcode
+    stdout = (
+        stdout or ""
+    ).strip()
+
+    stderr = (
+        stderr or ""
+    ).strip()
+
+    if fatal_resource_error(
+        stdout + "\n" + stderr
+    ):
+        print(
+            "  💥 Resource exhaustion detected. "
+            "Exiting worker so Railway can "
+            "start a clean container.",
+            flush=True,
         )
 
-        raise RuntimeError(
-            "Praamid check process exited "
-            f"without returning a result "
-            f"(exit code {exit_code})"
-        )
+        raise SystemExit(75)
 
-    finally:
-        result_queue.close()
-        result_queue.join_thread()
+    result = None
 
-    if not result.get("ok"):
-        raise RuntimeError(
-            result.get(
-                "error",
-                "Unknown Praamid check error",
+    # Only the last non-empty JSON line matters.
+    for line in reversed(
+        [
+            line.strip()
+            for line
+            in stdout.splitlines()
+            if line.strip()
+        ]
+    ):
+        try:
+            result = json.loads(
+                line
             )
+            break
+
+        except json.JSONDecodeError:
+            continue
+
+    if (
+        proc.returncode != 0
+        or not result
+        or not result.get("ok")
+    ):
+        detail = (
+            result.get("error")
+            if isinstance(
+                result,
+                dict,
+            )
+            else None
+        )
+
+        if not detail:
+            detail = (
+                stderr[-1200:]
+                or stdout[-1200:]
+                or (
+                    "Check subprocess exited "
+                    f"with code "
+                    f"{proc.returncode}"
+                )
+            )
+
+        raise RuntimeError(
+            detail
         )
 
     return (
@@ -450,7 +528,7 @@ def check_tracker(t):
     started = time.monotonic()
 
     available, count = (
-        check_with_watchdog(t)
+        check_with_subprocess(t)
     )
 
     elapsed = (
@@ -471,21 +549,22 @@ def check_tracker(t):
     )
 
     if count is None:
-        result = (
+        result_text = (
             "availability not explicitly "
             "confirmed"
         )
 
     elif count == 0:
-        result = "0 available"
+        result_text = "0 available"
 
     else:
-        result = (
+        result_text = (
             f"{count} available"
         )
 
     print(
-        f"  Result: {result}",
+        f"  Result: "
+        f"{result_text}",
         flush=True,
     )
 
@@ -538,10 +617,14 @@ def run_cycle():
     )
 
     for tracker in trackers:
+
         try:
             check_tracker(
                 tracker
             )
+
+        except SystemExit:
+            raise
 
         except Exception as error:
             print(
@@ -556,10 +639,19 @@ def run_cycle():
                 error,
             )
 
-            # Critical reliability behavior:
-            # never allow one failed/hung tracker
-            # to prevent subsequent trackers
-            # from being checked.
+            if fatal_resource_error(
+                error
+            ):
+                print(
+                    "  💥 Fatal resource exhaustion. "
+                    "Exiting worker for clean restart.",
+                    flush=True,
+                )
+
+                raise SystemExit(
+                    75
+                )
+
             print(
                 "  ↪ Continuing with next tracker.",
                 flush=True,
@@ -589,29 +681,70 @@ def main():
     )
 
     print(
-        f"Per-tracker watchdog: "
+        f"Per-tracker hard timeout: "
         f"{CHECK_TIMEOUT} seconds",
         flush=True,
     )
 
     print(
-        "Watchdog isolation: enabled "
-        "(each Praamid check runs in its own process)",
+        "Process-group watchdog: enabled",
         flush=True,
     )
 
+    print(
+        f"Preventive clean restart after "
+        f"{MAX_CYCLES_BEFORE_REFRESH} cycles",
+        flush=True,
+    )
+
+    completed_cycles = 0
+
     while True:
+
         try:
             run_cycle()
 
+        except SystemExit:
+            raise
+
         except Exception as error:
-            # A cycle-level error should not terminate
-            # the long-running worker.
             print(
                 f"❌ Unexpected cycle error: "
                 f"{type(error).__name__}: "
                 f"{error}",
                 flush=True,
+            )
+
+            if fatal_resource_error(
+                error
+            ):
+                print(
+                    "💥 Fatal resource exhaustion. "
+                    "Exiting for Railway restart.",
+                    flush=True,
+                )
+
+                raise SystemExit(
+                    75
+                )
+
+        completed_cycles += 1
+
+        if (
+            MAX_CYCLES_BEFORE_REFRESH > 0
+            and completed_cycles
+            >= MAX_CYCLES_BEFORE_REFRESH
+        ):
+            print(
+                "♻️ Preventive worker refresh: "
+                "cycle limit reached. "
+                "Exiting cleanly so Railway "
+                "restarts the container.",
+                flush=True,
+            )
+
+            raise SystemExit(
+                0
             )
 
         wait = random.randint(
