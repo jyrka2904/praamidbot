@@ -338,160 +338,240 @@ def select_target_date(
     )
 
 
-def open_praamid(
-    direction,
-    target_date,
-):
-    if direction not in ROUTES:
-        raise ValueError(
-            "Unknown ferry direction"
+class PraamidBrowserSession:
+    """
+    One Playwright + Chromium instance that can perform many tracker checks.
+
+    Each tracker gets a FRESH browser context/page, so cookies/page state cannot
+    leak from one tracker into another, while Chromium itself is launched only
+    once for the full worker cycle.
+    """
+
+    def __init__(self):
+        self.playwright = None
+        self.browser = None
+
+    def __enter__(self):
+        self.playwright = sync_playwright().start()
+
+        try:
+            self.browser = self.playwright.chromium.launch(
+                headless=True,
+                timeout=PLAYWRIGHT_BROWSER_LAUNCH_TIMEOUT_MS,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-default-apps",
+                    "--disable-extensions",
+                    "--disable-sync",
+                ],
+            )
+        except Exception:
+            try:
+                self.playwright.stop()
+            except Exception:
+                pass
+            self.playwright = None
+            raise
+
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def close(self):
+        if self.browser is not None:
+            try:
+                self.browser.close()
+            except Exception:
+                pass
+            self.browser = None
+
+        if self.playwright is not None:
+            try:
+                self.playwright.stop()
+            except Exception:
+                pass
+            self.playwright = None
+
+    def _new_page(self):
+        if self.browser is None:
+            raise RuntimeError("Praamid browser session is not open")
+
+        context = self.browser.new_context(
+            locale="et-EE",
+            timezone_id="Europe/Tallinn",
+            viewport={
+                "width": 1440,
+                "height": 1400,
+            },
         )
 
-    playwright = (
-        sync_playwright()
-        .start()
-    )
+        page = context.new_page()
 
-    browser = (
-        playwright.chromium.launch(
-            headless=True,
-            timeout=PLAYWRIGHT_BROWSER_LAUNCH_TIMEOUT_MS,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ],
-        )
-    )
-
-    page = browser.new_page(
-        locale="et-EE",
-        timezone_id="Europe/Tallinn",
-        viewport={
-            "width": 1440,
-            "height": 1400,
-        },
-    )
-
-    # Applies to locator actions such as click(), inner_text(),
-    # input_value(), wait_for_selector(), etc. unless overridden.
-    page.set_default_timeout(
-        PLAYWRIGHT_ACTION_TIMEOUT_MS
-    )
-
-    # Applies to page.goto() and other navigation operations.
-    page.set_default_navigation_timeout(
-        PLAYWRIGHT_NAVIGATION_TIMEOUT_MS
-    )
-
-    try:
-        page.goto(
-            f"{BASE}?direction={direction}",
-            wait_until="domcontentloaded",
-            timeout=PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
+        page.set_default_timeout(
+            PLAYWRIGHT_ACTION_TIMEOUT_MS
         )
 
-        # Give the Angular bootstrap a brief moment before checking
-        # the actual search form. This is intentionally short because
-        # wait_for_praamid_app() already has a bounded timeout.
-        page.wait_for_timeout(750)
-
-        # Critical: wait for Angular
-        # to render the real ticket form.
-        wait_for_praamid_app(
-            page
+        page.set_default_navigation_timeout(
+            PLAYWRIGHT_NAVIGATION_TIMEOUT_MS
         )
 
-        dismiss_cookies(
-            page
-        )
+        return context, page
 
-        select_target_date(
-            page,
+    def _prepare_page(
+        self,
+        direction,
+        target_date,
+    ):
+        if direction not in ROUTES:
+            raise ValueError("Unknown ferry direction")
+
+        context, page = self._new_page()
+
+        try:
+            page.goto(
+                f"{BASE}?direction={direction}",
+                wait_until="domcontentloaded",
+                timeout=PLAYWRIGHT_NAVIGATION_TIMEOUT_MS,
+            )
+
+            page.wait_for_timeout(750)
+
+            wait_for_praamid_app(page)
+            dismiss_cookies(page)
+            select_target_date(page, target_date)
+
+            return context, page
+
+        except Exception:
+            try:
+                context.close()
+            except Exception:
+                pass
+            raise
+
+    def get_departure_times(
+        self,
+        direction,
+        target_date,
+    ):
+        context, page = self._prepare_page(
+            direction,
             target_date,
         )
 
-        return (
-            playwright,
-            browser,
-            page,
+        try:
+            try:
+                text = (
+                    page.locator("#main-content")
+                    .inner_text(
+                        timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
+                    )
+                )
+            except Exception:
+                text = (
+                    page.locator("body")
+                    .inner_text(
+                        timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
+                    )
+                )
+
+            matches = re.findall(
+                r"\b"
+                r"([0-2]\d:[0-5]\d)"
+                r"\s*[-–]\s*"
+                r"([0-2]\d:[0-5]\d)"
+                r"\b",
+                text,
+            )
+
+            departures = []
+
+            for departure, arrival in matches:
+                if departure not in departures:
+                    departures.append(departure)
+
+            return departures
+
+        finally:
+            try:
+                context.close()
+            except Exception:
+                pass
+
+    def check_vehicle_availability(
+        self,
+        direction,
+        target_date,
+        target_time,
+        vehicle_label="Sõiduauto",
+    ):
+        context, page = self._prepare_page(
+            direction,
+            target_date,
         )
 
-    except Exception:
-        close_browser_safely(
-            browser,
-            playwright,
-        )
-        raise
+        try:
+            body = (
+                page.locator("body")
+                .inner_text(timeout=5000)
+            )
 
+            body = " ".join(body.split())
 
+            index = body.find(target_time)
 
-def close_browser_safely(
-    browser,
-    playwright,
-):
-    try:
-        browser.close()
-    except Exception:
-        pass
+            if index < 0:
+                raise RuntimeError(
+                    f"Departure {target_time} not found"
+                )
 
-    try:
-        playwright.stop()
-    except Exception:
-        pass
+            chunk = body[index:index + 2000]
+
+            match = re.search(
+                rf"{re.escape(vehicle_label)}"
+                r"\s*:?\s*(\d+)",
+                chunk,
+                re.IGNORECASE,
+            )
+
+            if match:
+                count = int(match.group(1))
+                return count > 0, count
+
+            lower = chunk.lower()
+
+            if (
+                "välja müüdud" in lower
+                or "sold out" in lower
+            ):
+                return False, 0
+
+            # Conservative fallback: never create a false-positive alert.
+            return False, None
+
+        finally:
+            try:
+                context.close()
+            except Exception:
+                pass
+
 
 def get_departure_times(
     direction,
     target_date,
 ):
-    playwright, browser, page = (
-        open_praamid(
+    """
+    Backwards-compatible public function used by the web app.
+    It uses one short-lived shared-session object for this one web request.
+    """
+    with PraamidBrowserSession() as session:
+        return session.get_departure_times(
             direction,
             target_date,
-        )
-    )
-
-    try:
-        try:
-            text = (
-                page.locator(
-                    "#main-content"
-                )
-                .inner_text(
-                    timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
-                )
-            )
-
-        except Exception:
-            text = (
-                page.locator("body")
-                .inner_text(
-                    timeout=PLAYWRIGHT_ACTION_TIMEOUT_MS
-                )
-            )
-
-        matches = re.findall(
-            r"\b"
-            r"([0-2]\d:[0-5]\d)"
-            r"\s*[-–]\s*"
-            r"([0-2]\d:[0-5]\d)"
-            r"\b",
-            text,
-        )
-
-        departures = []
-
-        for departure, arrival in matches:
-            if departure not in departures:
-                departures.append(
-                    departure
-                )
-
-        return departures
-
-    finally:
-        close_browser_safely(
-            browser,
-            playwright,
         )
 
 
@@ -501,73 +581,15 @@ def check_vehicle_availability(
     target_time,
     vehicle_label="Sõiduauto",
 ):
-    playwright, browser, page = (
-        open_praamid(
+    """
+    Backwards-compatible one-off availability function.
+    The background worker no longer calls this per tracker; it uses
+    PraamidBrowserSession once for the whole cycle through check_cycle.py.
+    """
+    with PraamidBrowserSession() as session:
+        return session.check_vehicle_availability(
             direction,
             target_date,
-        )
-    )
-
-    try:
-        body = (
-            page.locator("body")
-            .inner_text(
-                timeout=5000
-            )
-        )
-
-        body = " ".join(
-            body.split()
-        )
-
-        index = body.find(
-            target_time
-        )
-
-        if index < 0:
-            raise RuntimeError(
-                f"Departure "
-                f"{target_time} "
-                "not found"
-            )
-
-        chunk = body[
-            index:index + 2000
-        ]
-
-        match = re.search(
-            rf"{re.escape(vehicle_label)}"
-            r"\s*:?\s*(\d+)",
-            chunk,
-            re.IGNORECASE,
-        )
-
-        if match:
-            count = int(
-                match.group(1)
-            )
-
-            return (
-                count > 0,
-                count,
-            )
-
-        lower = chunk.lower()
-
-        if (
-            "välja müüdud"
-            in lower
-            or "sold out"
-            in lower
-        ):
-            return False, 0
-
-        # Conservative fallback:
-        # do not generate a false alert.
-        return False, None
-
-    finally:
-        close_browser_safely(
-            browser,
-            playwright,
+            target_time,
+            vehicle_label,
         )
