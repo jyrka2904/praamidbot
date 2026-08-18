@@ -381,6 +381,33 @@ class PraamidBrowserSession:
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
 
+    def restart(self):
+        """Fully rebuild Playwright + Chromium after a failed browser/session."""
+        self.close()
+        self.playwright = sync_playwright().start()
+        try:
+            self.browser = self.playwright.chromium.launch(
+                headless=True,
+                timeout=PLAYWRIGHT_BROWSER_LAUNCH_TIMEOUT_MS,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-default-apps",
+                    "--disable-extensions",
+                    "--disable-sync",
+                ],
+            )
+        except Exception:
+            try:
+                self.playwright.stop()
+            except Exception:
+                pass
+            self.playwright = None
+            raise
+        return self
+
     def close(self):
         if self.browser is not None:
             try:

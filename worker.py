@@ -17,13 +17,13 @@ from praamid import ROUTES, BASE
 TZ = ZoneInfo("Europe/Tallinn")
 
 # Short pause BETWEEN completed full cycles.
-MIN_WAIT = int(os.environ.get("CHECK_MIN_SECONDS", "5"))
-MAX_WAIT = int(os.environ.get("CHECK_MAX_SECONDS", "10"))
+MIN_WAIT = int(os.environ.get("CHECK_MIN_SECONDS", "60"))
+MAX_WAIT = int(os.environ.get("CHECK_MAX_SECONDS", "90"))
 
 # Hard timeout for the WHOLE shared-browser cycle subprocess.
 # A normal 5–6 tracker cycle should finish well below this.
 CYCLE_TIMEOUT = int(
-    os.environ.get("CYCLE_CHECK_TIMEOUT_SECONDS", "120")
+    os.environ.get("CYCLE_CHECK_TIMEOUT_SECONDS", "300")
 )
 
 # Preventive clean restart. With continuous checking, 600 cycles is
@@ -487,7 +487,7 @@ def main():
         flush=True,
     )
     print(
-        "Shared-browser mode: ONE Chromium launch per full cycle",
+        "Browser mode: fresh context per tracker + clean Chromium retry on failure",
         flush=True,
     )
     print(
