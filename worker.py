@@ -15,14 +15,14 @@ TZ = ZoneInfo("Europe/Tallinn")
 MIN_WAIT = int(
     os.environ.get(
         "CHECK_MIN_SECONDS",
-        "180",
+        "60",
     )
 )
 
 MAX_WAIT = int(
     os.environ.get(
         "CHECK_MAX_SECONDS",
-        "240",
+        "90",
     )
 )
 
