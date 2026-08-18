@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="{{ lang }}">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Praamid.ee Tracker</title>
+<title>Praamid Tracker</title>
 
 <style>
 :root{
@@ -120,32 +120,6 @@ button{
     font-size:15px;
 }
 
-.language-switch{
-    display:flex;
-    align-items:center;
-    gap:3px;
-    padding:4px;
-    background:rgba(255,255,255,.80);
-    border:1px solid #dbe7f5;
-    border-radius:12px;
-}
-.lang-pill{
-    min-width:36px;
-    height:34px;
-    padding:0 8px;
-    display:grid;
-    place-items:center;
-    border-radius:9px;
-    color:#61718b;
-    text-decoration:none;
-    font-size:12px;
-    font-weight:850;
-}
-.lang-pill.active{
-    background:#1267e8;
-    color:#fff;
-    box-shadow:0 4px 10px rgba(18,103,232,.18);
-}
 .account-actions{
     display:flex;
     align-items:center;
@@ -995,26 +969,19 @@ select:disabled{
             </div>
 
             <div>
-                <div class="brand-title">Praamid.ee Tracker</div>
-                <div class="brand-subtitle">{{ t.tagline }}</div>
+                <div class="brand-title">Praamid Tracker</div>
+                <div class="brand-subtitle">Ferry availability alerts</div>
             </div>
         </div>
 
         <div class="account-actions">
-
-            <div class="language-switch">
-                <a href="{{ url_for('set_language', lang='et', next=request.path) }}"
-                   class="lang-pill {% if lang == 'et' %}active{% endif %}">ET</a>
-                <a href="{{ url_for('set_language', lang='en', next=request.path) }}"
-                   class="lang-pill {% if lang == 'en' %}active{% endif %}">EN</a>
-            </div>
             <div class="user-chip">
                 <div class="user-avatar">●</div>
                 <div class="user-phone">{{ user.phone_number }}</div>
             </div>
 
             <form method="post" action="/logout">
-                <button class="logout-btn" type="submit">↪&nbsp; {{ t.logout }}</button>
+                <button class="logout-btn" type="submit">↪&nbsp; Log out</button>
             </form>
         </div>
 
@@ -1051,9 +1018,9 @@ select:disabled{
                     </div>
 
                     <div>
-                        <h2>{{ t.create_tracker }}</h2>
+                        <h2>Create a new tracker</h2>
                         <p class="section-subtitle">
-                            {{ t.create_tracker_sub }}
+                            Choose a scheduled departure and we'll monitor passenger-car availability automatically.
                         </p>
                     </div>
                 </div>
@@ -1065,7 +1032,7 @@ select:disabled{
                     <div class="form-grid">
 
                         <div class="field">
-                            <label for="direction">{{ t.route }}</label>
+                            <label for="direction">Route</label>
 
                             <select
                                 name="direction"
@@ -1079,7 +1046,7 @@ select:disabled{
 
 
                         <div class="field">
-                            <label for="travel_date">{{ t.date }}</label>
+                            <label for="travel_date">Date</label>
 
                             <input
                                 type="date"
@@ -1092,7 +1059,7 @@ select:disabled{
 
 
                         <div class="field">
-                            <label for="departure_time">{{ t.departure }}</label>
+                            <label for="departure_time">Departure</label>
 
                             <select
                                 name="departure_time"
@@ -1101,7 +1068,7 @@ select:disabled{
                                 required
                             >
                                 <option value="">
-                                    {{ t.select_route_date }}
+                                    Select route and date first
                                 </option>
                             </select>
 
@@ -1119,9 +1086,9 @@ select:disabled{
                         <div class="form-note">
                             <span class="info-dot">i</span>
                             <span>
-                                {{ t.up_to }} {{ max_open }} {{ t.trackers }}
+                                Up to {{ max_open }} trackers
                                 &nbsp;•&nbsp;
-                                {{ t.checked_every }}
+                                Continuous checking
                             </span>
                         </div>
 
@@ -1131,7 +1098,7 @@ select:disabled{
                             type="submit"
                             disabled
                         >
-                            ＋ {{ t.start_tracking }}
+                            ＋ Start tracking
                         </button>
 
                     </div>
@@ -1164,14 +1131,14 @@ select:disabled{
 
                         <div>
                             <h2>
-                                {{ t.active_trackers }}
+                                Active trackers
                                 <span style="font-size:16px;color:#6d7c94;font-weight:700">
                                     ({{ trackers|length }} / {{ max_open }})
                                 </span>
                             </h2>
 
                             <p class="section-subtitle">
-                                {{ t.active_sub }}
+                                We'll send an SMS alert and remove the tracker when availability is found.
                             </p>
                         </div>
                     </div>
@@ -1189,9 +1156,9 @@ select:disabled{
 
                         <div class="empty">
                             <div style="font-size:34px;margin-bottom:8px">🌊</div>
-                            <strong>{{ t.no_active }}</strong>
+                            <strong>No active trackers</strong>
                             <div style="margin-top:5px">
-                                {{ t.no_active_sub }}
+                                Create one above and we'll start monitoring.
                             </div>
                         </div>
 
@@ -1241,22 +1208,22 @@ select:disabled{
                             {% if tracker.status == 'paused' %}
 
                                 <div class="monitoring-badge paused">
-                                    ⏸ {{ t.paused }}
+                                    ⏸ Paused
                                 </div>
 
                                 <div class="status-caption">
-                                    {{ t.paused_sub }}
+                                    Monitoring temporarily paused
                                 </div>
 
                             {% else %}
 
                                 <div class="monitoring-badge">
                                     <span class="monitoring-dot"></span>
-                                    {{ t.monitoring }}
+                                    Monitoring
                                 </div>
 
                                 <div class="status-caption">
-                                    {{ t.checking_every_short }}
+                                    Checking continuously
                                 </div>
 
                             {% endif %}
@@ -1266,23 +1233,23 @@ select:disabled{
 
                         <div class="last-cell">
 
-                            {{ t.last_checked }}
+                            Last checked
 
                             {% if tracker.last_checked_display %}
                                 <strong>{{ tracker.last_checked_display }}</strong>
                             {% else %}
-                                <strong>{{ t.waiting_first }}</strong>
+                                <strong>Waiting for first check</strong>
                             {% endif %}
 
                             {% if tracker.last_count is not none %}
                                 <span>
-                                    {{ t.last_result }}: {{ tracker.last_count }} {{ t.available }}
+                                    Last result: {{ tracker.last_count }} available
                                 </span>
                             {% endif %}
 
                             {% if tracker.last_error %}
                                 <span style="display:block;color:#d33a42;margin-top:3px">
-                                    {{ t.check_error }}
+                                    Check error
                                 </span>
                             {% endif %}
 
@@ -1300,9 +1267,9 @@ select:disabled{
                                     type="submit"
                                 >
                                     {% if tracker.status == 'active' %}
-                                        {{ t.pause }}
+                                        Pause
                                     {% else %}
-                                        {{ t.resume }}
+                                        Resume
                                     {% endif %}
                                 </button>
                             </form>
@@ -1316,7 +1283,7 @@ select:disabled{
                                     class="small-btn remove-btn"
                                     type="submit"
                                 >
-                                    🗑 {{ t.remove }}
+                                    🗑 Remove
                                 </button>
                             </form>
 
@@ -1341,7 +1308,7 @@ select:disabled{
 
                     <div class="side-title">
                         <div class="side-title-icon">⚓</div>
-                        <span>{{ t.how_it_works }}</span>
+                        <span>How it works</span>
                     </div>
 
                     <div class="steps">
@@ -1349,28 +1316,28 @@ select:disabled{
                         <div class="step">
                             <div class="step-num">1</div>
                             <div class="step-text">
-                                {{ t.step1 }}
+                                You add a departure to watch
                             </div>
                         </div>
 
                         <div class="step">
                             <div class="step-num">2</div>
                             <div class="step-text">
-                                {{ t.step2 }}
+                                We check availability continuously
                             </div>
                         </div>
 
                         <div class="step">
                             <div class="step-num">3</div>
                             <div class="step-text">
-                                You get an SMS when a passenger-car ticket is {{ t.available }}
+                                You get an SMS when a passenger-car ticket is available
                             </div>
                         </div>
 
                         <div class="step">
                             <div class="step-num">4</div>
                             <div class="step-text">
-                                {{ t.step4 }}
+                                The tracker is removed automatically
                             </div>
                         </div>
 
@@ -1409,7 +1376,7 @@ select:disabled{
 
                     <div class="side-title">
                         <div class="side-title-icon">◉</div>
-                        <span>{{ t.good_to_know }}</span>
+                        <span>Good to know</span>
                     </div>
 
                     <div class="good-list">
@@ -1417,28 +1384,28 @@ select:disabled{
                         <div class="good-item">
                             <div class="check">✓</div>
                             <div>
-                                {{ t.good1 }}
+                                Alerts are sent to your verified phone number
                             </div>
                         </div>
 
                         <div class="good-item">
                             <div class="check">✓</div>
                             <div>
-                                {{ t.good2 }}
+                                You can have up to {{ max_open }} active trackers
                             </div>
                         </div>
 
                         <div class="good-item">
                             <div class="check">✓</div>
                             <div>
-                                {{ t.good3 }}
+                                The tracker is removed after an alert is submitted
                             </div>
                         </div>
 
                         <div class="good-item">
                             <div class="check">✓</div>
                             <div>
-                                {{ t.good4 }}
+                                If you miss the ticket, simply add the tracker again
                             </div>
                         </div>
 
@@ -1514,20 +1481,20 @@ async function loadDepartures() {
     addButton.disabled = true;
 
     departureEl.innerHTML =
-        `<option value="">{{ t.loading_departures }}</option>`;
+        '<option value="">Loading departures…</option>';
 
     statusEl.textContent = "";
 
     if (!dateEl.value) {
 
         departureEl.innerHTML =
-            '<option value="">{{ t.select_route_date }}</option>';
+            '<option value="">Select route and date first</option>';
 
         return;
     }
 
     statusEl.textContent =
-        "{{ t.checking_schedule }}";
+        "Checking the live Praamid.ee schedule…";
 
     try {
 
@@ -1557,7 +1524,7 @@ async function loadDepartures() {
         }
 
         departureEl.innerHTML =
-            `<option value="">{{ t.choose_departure }}</option>`;
+            '<option value="">Choose departure</option>';
 
         data.departures.forEach(
             (time) => {
@@ -1584,21 +1551,28 @@ async function loadDepartures() {
 
             statusEl.textContent =
                 data.departures.length
-                + " {{ t.scheduled_found }}";
+                + " scheduled departure"
+                + (
+                    data.departures.length
+                    === 1
+                    ? ""
+                    : "s"
+                )
+                + " found.";
 
         } else {
 
             departureEl.innerHTML =
-                `<option value="">{{ t.no_departures }}</option>`;
+                '<option value="">No departures found</option>';
 
             statusEl.textContent =
-                "{{ t.no_departures_date }}";
+                "No scheduled departures were found for this date.";
         }
 
     } catch (error) {
 
         departureEl.innerHTML =
-            `<option value="">{{ t.could_not_load }}</option>`;
+            '<option value="">Could not load departures</option>';
 
         statusEl.textContent =
             error.message;
