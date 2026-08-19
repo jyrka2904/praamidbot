@@ -17,8 +17,8 @@ from praamid import ROUTES, BASE
 TZ = ZoneInfo("Europe/Tallinn")
 
 # Short pause BETWEEN completed full cycles.
-MIN_WAIT = int(os.environ.get("CHECK_MIN_SECONDS", "60"))
-MAX_WAIT = int(os.environ.get("CHECK_MAX_SECONDS", "90"))
+MIN_WAIT = int(os.environ.get("CHECK_MIN_SECONDS", "15"))
+MAX_WAIT = int(os.environ.get("CHECK_MAX_SECONDS", "30"))
 
 # Hard timeout for the WHOLE shared-browser cycle subprocess.
 # A normal 5–6 tracker cycle should finish well below this.
